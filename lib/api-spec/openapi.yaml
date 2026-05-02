@@ -664,6 +664,268 @@ paths:
                 items:
                   $ref: "#/components/schemas/AnomalyLog"
 
+  /admin/users/{id}/set-currency:
+    post:
+      operationId: adminSetCurrency
+      tags: [admin]
+      summary: 유저 재화 설정 (관리자)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                mode:
+                  type: string
+                  enum: [set, add, subtract]
+              required: [amount]
+      responses:
+        "200":
+          description: 변경된 유저 정보
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  nickname:
+                    type: string
+                  currency:
+                    type: number
+
+  /admin/users/{id}/set-role:
+    post:
+      operationId: adminSetRole
+      tags: [admin]
+      summary: 유저 역할 변경 (마스터 전용)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+              required: [role]
+      responses:
+        "200":
+          description: 변경된 역할
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  nickname:
+                    type: string
+                  role:
+                    type: string
+
+  /admin/users/{id}/give-item:
+    post:
+      operationId: adminGiveItem
+      tags: [admin]
+      summary: 유저 아이템 지급 (관리자)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                itemId:
+                  type: string
+              required: [itemId]
+      responses:
+        "200":
+          description: 지급 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /admin/users/{id}/reset-gamestate:
+    delete:
+      operationId: adminResetGamestate
+      tags: [admin]
+      summary: 유저 게임 상태 초기화 (관리자)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 초기화 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /admin/users/{id}/clear-inventory:
+    delete:
+      operationId: adminClearInventory
+      tags: [admin]
+      summary: 유저 인벤토리 초기화 (관리자)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 초기화 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /admin/users/{id}/reset-password:
+    post:
+      operationId: adminResetPassword
+      tags: [admin]
+      summary: 유저 비밀번호 초기화 (마스터 전용)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                newPassword:
+                  type: string
+              required: [newPassword]
+      responses:
+        "200":
+          description: 초기화 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /admin/users/{id}/gamestate:
+    get:
+      operationId: adminGetGamestate
+      tags: [admin]
+      summary: 유저 게임 상태 조회 (관리자)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 게임 상태
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameState"
+
+  /admin/economy:
+    get:
+      operationId: getAdminEconomy
+      tags: [admin]
+      summary: 경제 현황 조회 (관리자)
+      responses:
+        "200":
+          description: 경제 현황
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalCirculating:
+                    type: number
+                  averageCurrency:
+                    type: number
+                  maxCurrency:
+                    type: number
+                  richest:
+                    type: array
+                    items:
+                      type: object
+
+  /admin/economy/give-all:
+    post:
+      operationId: adminGiveAll
+      tags: [admin]
+      summary: 전체 유저 재화 지급 (관리자)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+              required: [amount]
+      responses:
+        "200":
+          description: 지급 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /admin/broadcast-event:
+    post:
+      operationId: adminBroadcastEvent
+      tags: [admin]
+      summary: 전체 서버 이벤트 발생 (관리자)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                eventType:
+                  type: string
+                payload:
+                  type: object
+              required: [eventType]
+      responses:
+        "200":
+          description: 이벤트 발생 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
   # ───────────────── REPORTS ─────────────────
   /reports:
     get:

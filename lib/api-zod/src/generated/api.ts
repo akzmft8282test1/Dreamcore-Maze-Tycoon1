@@ -529,6 +529,144 @@ export const GetAnomaliesResponseItem = zod.object({
 export const GetAnomaliesResponse = zod.array(GetAnomaliesResponseItem);
 
 /**
+ * @summary 유저 재화 설정 (관리자)
+ */
+export const AdminSetCurrencyParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AdminSetCurrencyBody = zod.object({
+  amount: zod.number(),
+  mode: zod.enum(["set", "add", "subtract"]).optional(),
+});
+
+export const AdminSetCurrencyResponse = zod.object({
+  id: zod.number().optional(),
+  nickname: zod.string().optional(),
+  currency: zod.number().optional(),
+});
+
+/**
+ * @summary 유저 역할 변경 (마스터 전용)
+ */
+export const AdminSetRoleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AdminSetRoleBody = zod.object({
+  role: zod.string(),
+});
+
+export const AdminSetRoleResponse = zod.object({
+  id: zod.number().optional(),
+  nickname: zod.string().optional(),
+  role: zod.string().optional(),
+});
+
+/**
+ * @summary 유저 아이템 지급 (관리자)
+ */
+export const AdminGiveItemParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AdminGiveItemBody = zod.object({
+  itemId: zod.string(),
+});
+
+export const AdminGiveItemResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary 유저 게임 상태 초기화 (관리자)
+ */
+export const AdminResetGamestateParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AdminResetGamestateResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary 유저 인벤토리 초기화 (관리자)
+ */
+export const AdminClearInventoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AdminClearInventoryResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary 유저 비밀번호 초기화 (마스터 전용)
+ */
+export const AdminResetPasswordParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AdminResetPasswordBody = zod.object({
+  newPassword: zod.string(),
+});
+
+export const AdminResetPasswordResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary 유저 게임 상태 조회 (관리자)
+ */
+export const AdminGetGamestateParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AdminGetGamestateResponse = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  level: zod.number(),
+  currency: zod.number(),
+  upgrades: zod.object({}).passthrough(),
+  position: zod.object({}).passthrough(),
+  stats: zod.object({}).passthrough(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary 경제 현황 조회 (관리자)
+ */
+export const GetAdminEconomyResponse = zod.object({
+  totalCirculating: zod.number().optional(),
+  averageCurrency: zod.number().optional(),
+  maxCurrency: zod.number().optional(),
+  richest: zod.array(zod.object({}).passthrough()).optional(),
+});
+
+/**
+ * @summary 전체 유저 재화 지급 (관리자)
+ */
+export const AdminGiveAllBody = zod.object({
+  amount: zod.number(),
+});
+
+export const AdminGiveAllResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary 전체 서버 이벤트 발생 (관리자)
+ */
+export const AdminBroadcastEventBody = zod.object({
+  eventType: zod.string(),
+  payload: zod.object({}).passthrough().optional(),
+});
+
+export const AdminBroadcastEventResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
  * @summary 신고 목록
  */
 export const ListReportsResponseItem = zod.object({

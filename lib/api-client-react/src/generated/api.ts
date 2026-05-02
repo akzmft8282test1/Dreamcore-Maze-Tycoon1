@@ -17,6 +17,14 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AdminBroadcastEventBody,
+  AdminGiveAllBody,
+  AdminGiveItemBody,
+  AdminResetPasswordBody,
+  AdminSetCurrency200,
+  AdminSetCurrencyBody,
+  AdminSetRole200,
+  AdminSetRoleBody,
   AdminStats,
   AnnouncementBody,
   AnomalyLog,
@@ -31,6 +39,7 @@ import type {
   ErrorResponse,
   GameServer,
   GameState,
+  GetAdminEconomy200,
   GetAdminLogsParams,
   GetChatLogsParams,
   GuestbookMessage,
@@ -2892,6 +2901,856 @@ export function useGetAnomalies<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary 유저 재화 설정 (관리자)
+ */
+export const getAdminSetCurrencyUrl = (id: number) => {
+  return `/api/admin/users/${id}/set-currency`;
+};
+
+export const adminSetCurrency = async (
+  id: number,
+  adminSetCurrencyBody: AdminSetCurrencyBody,
+  options?: RequestInit,
+): Promise<AdminSetCurrency200> => {
+  return customFetch<AdminSetCurrency200>(getAdminSetCurrencyUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(adminSetCurrencyBody),
+  });
+};
+
+export const getAdminSetCurrencyMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminSetCurrency>>,
+    TError,
+    { id: number; data: BodyType<AdminSetCurrencyBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminSetCurrency>>,
+  TError,
+  { id: number; data: BodyType<AdminSetCurrencyBody> },
+  TContext
+> => {
+  const mutationKey = ["adminSetCurrency"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminSetCurrency>>,
+    { id: number; data: BodyType<AdminSetCurrencyBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return adminSetCurrency(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminSetCurrencyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminSetCurrency>>
+>;
+export type AdminSetCurrencyMutationBody = BodyType<AdminSetCurrencyBody>;
+export type AdminSetCurrencyMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 유저 재화 설정 (관리자)
+ */
+export const useAdminSetCurrency = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminSetCurrency>>,
+    TError,
+    { id: number; data: BodyType<AdminSetCurrencyBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminSetCurrency>>,
+  TError,
+  { id: number; data: BodyType<AdminSetCurrencyBody> },
+  TContext
+> => {
+  return useMutation(getAdminSetCurrencyMutationOptions(options));
+};
+
+/**
+ * @summary 유저 역할 변경 (마스터 전용)
+ */
+export const getAdminSetRoleUrl = (id: number) => {
+  return `/api/admin/users/${id}/set-role`;
+};
+
+export const adminSetRole = async (
+  id: number,
+  adminSetRoleBody: AdminSetRoleBody,
+  options?: RequestInit,
+): Promise<AdminSetRole200> => {
+  return customFetch<AdminSetRole200>(getAdminSetRoleUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(adminSetRoleBody),
+  });
+};
+
+export const getAdminSetRoleMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminSetRole>>,
+    TError,
+    { id: number; data: BodyType<AdminSetRoleBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminSetRole>>,
+  TError,
+  { id: number; data: BodyType<AdminSetRoleBody> },
+  TContext
+> => {
+  const mutationKey = ["adminSetRole"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminSetRole>>,
+    { id: number; data: BodyType<AdminSetRoleBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return adminSetRole(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminSetRoleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminSetRole>>
+>;
+export type AdminSetRoleMutationBody = BodyType<AdminSetRoleBody>;
+export type AdminSetRoleMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 유저 역할 변경 (마스터 전용)
+ */
+export const useAdminSetRole = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminSetRole>>,
+    TError,
+    { id: number; data: BodyType<AdminSetRoleBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminSetRole>>,
+  TError,
+  { id: number; data: BodyType<AdminSetRoleBody> },
+  TContext
+> => {
+  return useMutation(getAdminSetRoleMutationOptions(options));
+};
+
+/**
+ * @summary 유저 아이템 지급 (관리자)
+ */
+export const getAdminGiveItemUrl = (id: number) => {
+  return `/api/admin/users/${id}/give-item`;
+};
+
+export const adminGiveItem = async (
+  id: number,
+  adminGiveItemBody: AdminGiveItemBody,
+  options?: RequestInit,
+): Promise<MessageResponse> => {
+  return customFetch<MessageResponse>(getAdminGiveItemUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(adminGiveItemBody),
+  });
+};
+
+export const getAdminGiveItemMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminGiveItem>>,
+    TError,
+    { id: number; data: BodyType<AdminGiveItemBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminGiveItem>>,
+  TError,
+  { id: number; data: BodyType<AdminGiveItemBody> },
+  TContext
+> => {
+  const mutationKey = ["adminGiveItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminGiveItem>>,
+    { id: number; data: BodyType<AdminGiveItemBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return adminGiveItem(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminGiveItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminGiveItem>>
+>;
+export type AdminGiveItemMutationBody = BodyType<AdminGiveItemBody>;
+export type AdminGiveItemMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 유저 아이템 지급 (관리자)
+ */
+export const useAdminGiveItem = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminGiveItem>>,
+    TError,
+    { id: number; data: BodyType<AdminGiveItemBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminGiveItem>>,
+  TError,
+  { id: number; data: BodyType<AdminGiveItemBody> },
+  TContext
+> => {
+  return useMutation(getAdminGiveItemMutationOptions(options));
+};
+
+/**
+ * @summary 유저 게임 상태 초기화 (관리자)
+ */
+export const getAdminResetGamestateUrl = (id: number) => {
+  return `/api/admin/users/${id}/reset-gamestate`;
+};
+
+export const adminResetGamestate = async (
+  id: number,
+  options?: RequestInit,
+): Promise<MessageResponse> => {
+  return customFetch<MessageResponse>(getAdminResetGamestateUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAdminResetGamestateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminResetGamestate>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminResetGamestate>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["adminResetGamestate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminResetGamestate>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return adminResetGamestate(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminResetGamestateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminResetGamestate>>
+>;
+
+export type AdminResetGamestateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 유저 게임 상태 초기화 (관리자)
+ */
+export const useAdminResetGamestate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminResetGamestate>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminResetGamestate>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getAdminResetGamestateMutationOptions(options));
+};
+
+/**
+ * @summary 유저 인벤토리 초기화 (관리자)
+ */
+export const getAdminClearInventoryUrl = (id: number) => {
+  return `/api/admin/users/${id}/clear-inventory`;
+};
+
+export const adminClearInventory = async (
+  id: number,
+  options?: RequestInit,
+): Promise<MessageResponse> => {
+  return customFetch<MessageResponse>(getAdminClearInventoryUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAdminClearInventoryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminClearInventory>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminClearInventory>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["adminClearInventory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminClearInventory>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return adminClearInventory(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminClearInventoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminClearInventory>>
+>;
+
+export type AdminClearInventoryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 유저 인벤토리 초기화 (관리자)
+ */
+export const useAdminClearInventory = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminClearInventory>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminClearInventory>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getAdminClearInventoryMutationOptions(options));
+};
+
+/**
+ * @summary 유저 비밀번호 초기화 (마스터 전용)
+ */
+export const getAdminResetPasswordUrl = (id: number) => {
+  return `/api/admin/users/${id}/reset-password`;
+};
+
+export const adminResetPassword = async (
+  id: number,
+  adminResetPasswordBody: AdminResetPasswordBody,
+  options?: RequestInit,
+): Promise<MessageResponse> => {
+  return customFetch<MessageResponse>(getAdminResetPasswordUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(adminResetPasswordBody),
+  });
+};
+
+export const getAdminResetPasswordMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminResetPassword>>,
+    TError,
+    { id: number; data: BodyType<AdminResetPasswordBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminResetPassword>>,
+  TError,
+  { id: number; data: BodyType<AdminResetPasswordBody> },
+  TContext
+> => {
+  const mutationKey = ["adminResetPassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminResetPassword>>,
+    { id: number; data: BodyType<AdminResetPasswordBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return adminResetPassword(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminResetPasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminResetPassword>>
+>;
+export type AdminResetPasswordMutationBody = BodyType<AdminResetPasswordBody>;
+export type AdminResetPasswordMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 유저 비밀번호 초기화 (마스터 전용)
+ */
+export const useAdminResetPassword = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminResetPassword>>,
+    TError,
+    { id: number; data: BodyType<AdminResetPasswordBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminResetPassword>>,
+  TError,
+  { id: number; data: BodyType<AdminResetPasswordBody> },
+  TContext
+> => {
+  return useMutation(getAdminResetPasswordMutationOptions(options));
+};
+
+/**
+ * @summary 유저 게임 상태 조회 (관리자)
+ */
+export const getAdminGetGamestateUrl = (id: number) => {
+  return `/api/admin/users/${id}/gamestate`;
+};
+
+export const adminGetGamestate = async (
+  id: number,
+  options?: RequestInit,
+): Promise<GameState> => {
+  return customFetch<GameState>(getAdminGetGamestateUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAdminGetGamestateQueryKey = (id: number) => {
+  return [`/api/admin/users/${id}/gamestate`] as const;
+};
+
+export const getAdminGetGamestateQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminGetGamestate>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminGetGamestate>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAdminGetGamestateQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof adminGetGamestate>>
+  > = ({ signal }) => adminGetGamestate(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminGetGamestate>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminGetGamestateQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminGetGamestate>>
+>;
+export type AdminGetGamestateQueryError = ErrorType<unknown>;
+
+/**
+ * @summary 유저 게임 상태 조회 (관리자)
+ */
+
+export function useAdminGetGamestate<
+  TData = Awaited<ReturnType<typeof adminGetGamestate>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminGetGamestate>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminGetGamestateQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary 경제 현황 조회 (관리자)
+ */
+export const getGetAdminEconomyUrl = () => {
+  return `/api/admin/economy`;
+};
+
+export const getAdminEconomy = async (
+  options?: RequestInit,
+): Promise<GetAdminEconomy200> => {
+  return customFetch<GetAdminEconomy200>(getGetAdminEconomyUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAdminEconomyQueryKey = () => {
+  return [`/api/admin/economy`] as const;
+};
+
+export const getGetAdminEconomyQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminEconomy>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminEconomy>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAdminEconomyQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminEconomy>>> = ({
+    signal,
+  }) => getAdminEconomy({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminEconomy>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminEconomyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminEconomy>>
+>;
+export type GetAdminEconomyQueryError = ErrorType<unknown>;
+
+/**
+ * @summary 경제 현황 조회 (관리자)
+ */
+
+export function useGetAdminEconomy<
+  TData = Awaited<ReturnType<typeof getAdminEconomy>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminEconomy>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminEconomyQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary 전체 유저 재화 지급 (관리자)
+ */
+export const getAdminGiveAllUrl = () => {
+  return `/api/admin/economy/give-all`;
+};
+
+export const adminGiveAll = async (
+  adminGiveAllBody: AdminGiveAllBody,
+  options?: RequestInit,
+): Promise<MessageResponse> => {
+  return customFetch<MessageResponse>(getAdminGiveAllUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(adminGiveAllBody),
+  });
+};
+
+export const getAdminGiveAllMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminGiveAll>>,
+    TError,
+    { data: BodyType<AdminGiveAllBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminGiveAll>>,
+  TError,
+  { data: BodyType<AdminGiveAllBody> },
+  TContext
+> => {
+  const mutationKey = ["adminGiveAll"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminGiveAll>>,
+    { data: BodyType<AdminGiveAllBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return adminGiveAll(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminGiveAllMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminGiveAll>>
+>;
+export type AdminGiveAllMutationBody = BodyType<AdminGiveAllBody>;
+export type AdminGiveAllMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 전체 유저 재화 지급 (관리자)
+ */
+export const useAdminGiveAll = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminGiveAll>>,
+    TError,
+    { data: BodyType<AdminGiveAllBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminGiveAll>>,
+  TError,
+  { data: BodyType<AdminGiveAllBody> },
+  TContext
+> => {
+  return useMutation(getAdminGiveAllMutationOptions(options));
+};
+
+/**
+ * @summary 전체 서버 이벤트 발생 (관리자)
+ */
+export const getAdminBroadcastEventUrl = () => {
+  return `/api/admin/broadcast-event`;
+};
+
+export const adminBroadcastEvent = async (
+  adminBroadcastEventBody: AdminBroadcastEventBody,
+  options?: RequestInit,
+): Promise<MessageResponse> => {
+  return customFetch<MessageResponse>(getAdminBroadcastEventUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(adminBroadcastEventBody),
+  });
+};
+
+export const getAdminBroadcastEventMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminBroadcastEvent>>,
+    TError,
+    { data: BodyType<AdminBroadcastEventBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminBroadcastEvent>>,
+  TError,
+  { data: BodyType<AdminBroadcastEventBody> },
+  TContext
+> => {
+  const mutationKey = ["adminBroadcastEvent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminBroadcastEvent>>,
+    { data: BodyType<AdminBroadcastEventBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return adminBroadcastEvent(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminBroadcastEventMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminBroadcastEvent>>
+>;
+export type AdminBroadcastEventMutationBody = BodyType<AdminBroadcastEventBody>;
+export type AdminBroadcastEventMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 전체 서버 이벤트 발생 (관리자)
+ */
+export const useAdminBroadcastEvent = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminBroadcastEvent>>,
+    TError,
+    { data: BodyType<AdminBroadcastEventBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminBroadcastEvent>>,
+  TError,
+  { data: BodyType<AdminBroadcastEventBody> },
+  TContext
+> => {
+  return useMutation(getAdminBroadcastEventMutationOptions(options));
+};
 
 /**
  * @summary 신고 목록

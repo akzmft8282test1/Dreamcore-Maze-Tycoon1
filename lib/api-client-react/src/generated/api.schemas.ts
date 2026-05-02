@@ -301,6 +301,64 @@ export type GetAdminLogsParams = {
   type?: string;
 };
 
+export type AdminSetCurrencyBodyMode =
+  (typeof AdminSetCurrencyBodyMode)[keyof typeof AdminSetCurrencyBodyMode];
+
+export const AdminSetCurrencyBodyMode = {
+  set: "set",
+  add: "add",
+  subtract: "subtract",
+} as const;
+
+export type AdminSetCurrencyBody = {
+  amount: number;
+  mode?: AdminSetCurrencyBodyMode;
+};
+
+export type AdminSetCurrency200 = {
+  id?: number;
+  nickname?: string;
+  currency?: number;
+};
+
+export type AdminSetRoleBody = {
+  role: string;
+};
+
+export type AdminSetRole200 = {
+  id?: number;
+  nickname?: string;
+  role?: string;
+};
+
+export type AdminGiveItemBody = {
+  itemId: string;
+};
+
+export type AdminResetPasswordBody = {
+  newPassword: string;
+};
+
+export type GetAdminEconomy200RichestItem = { [key: string]: unknown };
+
+export type GetAdminEconomy200 = {
+  totalCirculating?: number;
+  averageCurrency?: number;
+  maxCurrency?: number;
+  richest?: GetAdminEconomy200RichestItem[];
+};
+
+export type AdminGiveAllBody = {
+  amount: number;
+};
+
+export type AdminBroadcastEventBodyPayload = { [key: string]: unknown };
+
+export type AdminBroadcastEventBody = {
+  eventType: string;
+  payload?: AdminBroadcastEventBodyPayload;
+};
+
 export type GetChatLogsParams = {
   channel?: string;
   limit?: number;

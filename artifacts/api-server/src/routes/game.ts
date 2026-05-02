@@ -73,12 +73,19 @@ router.post("/game/upgrades/:upgradeId/purchase", requireAuth, async (req, res):
     return;
   }
 
-  const [state] = await db.select().from(gameStatesTable)
+  // 게임 상태가 없으면 자동 초기화
+  let [state] = await db.select().from(gameStatesTable)
     .where(eq(gameStatesTable.userId, user.id));
 
   if (!state) {
-    res.status(400).json({ error: "게임 상태가 없습니다" });
-    return;
+    [state] = await db.insert(gameStatesTable).values({
+      userId: user.id,
+      level: 1,
+      currency: user.currency,
+      upgrades: {},
+      position: { x: 0, y: 0, z: 0, mapId: "default" },
+      stats: { kills: 0, deaths: 0, distance: 0, roomsExplored: 0 },
+    }).returning();
   }
 
   const currentUpgrades = (state.upgrades as Record<string, number>) || {};
@@ -90,15 +97,24 @@ router.post("/game/upgrades/:upgradeId/purchase", requireAuth, async (req, res):
   }
 
   const totalCost = upgrade.cost * (currentLevel + 1);
-  if (state.currency < totalCost) {
-    res.status(400).json({ error: `재화가 부족합니다 (필요: ${totalCost})` });
+
+  // ⭐ usersTable.currency 기준으로 잔고 확인 (실제 표시되는 재화)
+  const [freshUser] = await db.select().from(usersTable).where(eq(usersTable.id, user.id));
+  if (!freshUser || freshUser.currency < totalCost) {
+    res.status(400).json({ error: `재화가 부족합니다 (필요: ${totalCost} DC, 보유: ${freshUser?.currency ?? 0} DC)` });
     return;
   }
 
   const newUpgrades = { ...currentUpgrades, [upgradeId]: currentLevel + 1 };
+
+  // usersTable과 gameStatesTable 동시 차감
+  await db.update(usersTable)
+    .set({ currency: freshUser.currency - totalCost })
+    .where(eq(usersTable.id, user.id));
+
   const [updatedState] = await db.update(gameStatesTable)
     .set({
-      currency: state.currency - totalCost,
+      currency: freshUser.currency - totalCost,
       upgrades: newUpgrades,
     })
     .where(eq(gameStatesTable.userId, user.id))
