@@ -62,29 +62,42 @@ router.post("/shop/buy", requireAuth, async (req, res): Promise<void> => {
   res.json({ message: `${item.name}을(를) 구매했습니다` });
 });
 
-// POST /api/shop/equip — 스킨 장착
+// POST /api/shop/equip — 스킨 또는 손전등 장착
 router.post("/shop/equip", requireAuth, async (req, res): Promise<void> => {
   const user = (req as any).user;
   const { itemId } = req.body;
 
-  if (itemId === null) {
-    // 스킨 해제
+  // 해제 처리 (itemId: null 또는 "none")
+  if (!itemId || itemId === "none") {
     await db.update(usersTable).set({ equippedSkin: null }).where(eq(usersTable.id, user.id));
     res.json({ message: "스킨을 해제했습니다" });
     return;
   }
 
+  // 손전등 해제
+  if (itemId === "flashlight_none") {
+    await db.update(usersTable).set({ equippedFlashlight: null }).where(eq(usersTable.id, user.id));
+    res.json({ message: "손전등을 해제했습니다" });
+    return;
+  }
+
   // 인벤토리에 있는지 확인
-  const [item] = await db.select().from(inventoryTable)
+  const [invItem] = await db.select().from(inventoryTable)
     .where(and(eq(inventoryTable.userId, user.id), eq(inventoryTable.itemId, itemId)));
 
-  if (!item) {
+  if (!invItem) {
     res.status(400).json({ error: "보유하지 않은 아이템입니다" });
     return;
   }
 
-  await db.update(usersTable).set({ equippedSkin: itemId }).where(eq(usersTable.id, user.id));
-  res.json({ message: "스킨이 장착되었습니다" });
+  // 손전등이면 equippedFlashlight, 스킨이면 equippedSkin에 저장
+  if (invItem.itemType === "flashlight") {
+    await db.update(usersTable).set({ equippedFlashlight: itemId }).where(eq(usersTable.id, user.id));
+    res.json({ message: "손전등이 장착되었습니다" });
+  } else {
+    await db.update(usersTable).set({ equippedSkin: itemId }).where(eq(usersTable.id, user.id));
+    res.json({ message: "스킨이 장착되었습니다" });
+  }
 });
 
 export default router;

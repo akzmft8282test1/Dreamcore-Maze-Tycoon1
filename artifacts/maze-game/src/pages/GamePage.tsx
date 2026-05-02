@@ -9,11 +9,17 @@ import Minimap from "@/components/game/Minimap";
 import DreamcoreEvents from "@/components/game/DreamcoreEvents";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQueryClient } from "@tanstack/react-query";
 import {
-  useUpdateGameState, useGetUserInventory, getGetUserInventoryQueryKey,
+  useUpdateGameState,
+  useGetUserInventory,
+  useEquipSkin,
+  getGetUserInventoryQueryKey,
+  getGetMeQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function GamePage() {
   const [, setLocation] = useLocation();
@@ -24,14 +30,20 @@ export default function GamePage() {
   const { currentServerId, leaveServer } = useSocket();
   const { user } = useAuth();
   const updateState = useUpdateGameState();
+  const equipSkin = useEquipSkin();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  // 인벤토리에서 장착된 손전등 찾기
+  // 인벤토리에서 손전등 목록 가져오기
   const { data: inventory = [] } = useGetUserInventory(user?.id ?? 0, {
     query: { queryKey: getGetUserInventoryQueryKey(user?.id ?? 0), enabled: !!user }
   });
-  const equippedFlashlight = (inventory as any[])
-    .find((item: any) => item.itemType === "flashlight" && item.equipped)
-    ?.itemId ?? null;
+  const ownedFlashlights = (inventory as any[]).filter(
+    (item: any) => item.itemType === "flashlight"
+  );
+
+  // 현재 장착된 손전등 (서버 상태)
+  const equippedFlashlight = (user as any)?.equippedFlashlight ?? null;
 
   const handlePositionChange = useCallback((pos: { x: number; y: number; z: number; mapId: string }) => {
     setPlayerPos({ x: pos.x, z: pos.z });
@@ -42,6 +54,21 @@ export default function GamePage() {
 
   const handleViewToggle = useCallback(() => setIs2DView(v => !v), []);
 
+  // 손전등 교체 핸들러
+  const handleEquipFlashlight = useCallback(async (itemId: string | null) => {
+    try {
+      await equipSkin.mutateAsync({ data: { itemId: itemId ?? "flashlight_none" } });
+      // user 정보 갱신
+      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      const name = itemId
+        ? ({ flashlight_basic: "기본 손전등", flashlight_wide: "광각 손전등", flashlight_uv: "UV 손전등", flashlight_dreamcore: "드림코어 랜턴" }[itemId] ?? itemId)
+        : "기본 손전등";
+      toast({ title: `${name} 장착`, description: "손전등이 교체되었습니다" });
+    } catch {
+      toast({ title: "장착 실패", variant: "destructive" });
+    }
+  }, [equipSkin, queryClient, toast]);
+
   const handleLeave = () => {
     leaveServer();
     setLocation("/lobby");
@@ -49,7 +76,6 @@ export default function GamePage() {
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden" data-testid="game-page">
-      {/* Three.js 캔버스 영역 */}
       <div className="absolute inset-0">
         {!is2DView && (
           <MazeEngine
@@ -72,7 +98,6 @@ export default function GamePage() {
         )}
       </div>
 
-      {/* HUD */}
       <HUD
         serverName={currentServerId ? `서버 #${currentServerId}` : "솔로 탐험"}
         onViewToggle={handleViewToggle}
@@ -80,18 +105,14 @@ export default function GamePage() {
         roomNumber={roomNumber}
         flashlightOn={flashlightOn}
         equippedFlashlight={equippedFlashlight}
+        ownedFlashlights={ownedFlashlights}
+        onEquipFlashlight={handleEquipFlashlight}
       />
 
-      {/* 채팅 */}
       <ChatSystem />
-
-      {/* 미니맵 */}
       {!is2DView && <Minimap playerPos={playerPos} compact={true} />}
-
-      {/* 드림코어 이벤트 */}
       <DreamcoreEvents />
 
-      {/* 나가기 버튼 */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

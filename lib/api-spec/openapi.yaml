@@ -850,6 +850,8 @@ components:
           type: integer
         equippedSkin:
           type: ["string", "null"]
+        equippedFlashlight:
+          type: ["string", "null"]
         isBanned:
           type: boolean
         totalScore:

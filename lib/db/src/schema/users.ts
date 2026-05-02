@@ -19,6 +19,7 @@ export const usersTable = pgTable("users", {
   role: text("role").notNull().default("user"),         // user | admin | master
   currency: integer("currency").notNull().default(0),  // 보유 재화
   equippedSkin: text("equipped_skin"),                 // 장착한 스킨 ID
+  equippedFlashlight: text("equipped_flashlight"),     // 장착한 손전등 ID
   isBanned: boolean("is_banned").notNull().default(false), // 채팅 금지 여부
   totalScore: integer("total_score").notNull().default(0), // 누적 점수
   playtime: integer("playtime").notNull().default(0),  // 플레이 시간 (초)

@@ -149,6 +149,7 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
     role: user.role,
     currency: user.currency,
     equippedSkin: user.equippedSkin,
+    equippedFlashlight: user.equippedFlashlight,
     isBanned: user.isBanned,
     totalScore: user.totalScore,
     playtime: user.playtime,

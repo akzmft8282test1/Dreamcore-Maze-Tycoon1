@@ -36,6 +36,8 @@ export interface User {
   currency: number;
   /** @nullable */
   equippedSkin?: string | null;
+  /** @nullable */
+  equippedFlashlight?: string | null;
   isBanned: boolean;
   totalScore: number;
   playtime: number;
