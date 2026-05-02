@@ -1,6 +1,5 @@
 // 로그인 / 회원가입 페이지
 import { useState } from "react";
-import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -28,7 +27,6 @@ type LoginForm = z.infer<typeof loginSchema>;
 type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function LoginPage() {
-  const [, setLocation] = useLocation();
   const { login } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("login");
@@ -43,11 +41,11 @@ export default function LoginPage() {
     try {
       const result = await loginMutation.mutateAsync({ data });
       login(result.token as string);
-      setLocation("/lobby");
+      // 리다이렉트는 AppRouter의 useEffect가 user 로드 완료 후 처리
     } catch (err: any) {
       toast({
         title: "로그인 실패",
-        description: err.response?.data?.error || "아이디 또는 비밀번호가 틀렸습니다",
+        description: (err as any)?.response?.data?.error || "아이디 또는 비밀번호가 틀렸습니다",
         variant: "destructive",
       });
     }
@@ -57,11 +55,11 @@ export default function LoginPage() {
     try {
       const result = await registerMutation.mutateAsync({ data });
       login(result.token as string);
-      setLocation("/lobby");
+      // 리다이렉트는 AppRouter의 useEffect가 user 로드 완료 후 처리
     } catch (err: any) {
       toast({
         title: "회원가입 실패",
-        description: err.response?.data?.error || "회원가입에 실패했습니다",
+        description: (err as any)?.response?.data?.error || "회원가입에 실패했습니다",
         variant: "destructive",
       });
     }
