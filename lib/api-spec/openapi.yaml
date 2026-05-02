@@ -1,29 +1,786 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
+  # Do not change the title
   title: Api
   version: 0.1.0
-  description: API specification
+  description: 드림코어 미로 타이쿤 API
 servers:
   - url: /api
-    description: Base API path
+    description: API 기본 경로
 tags:
   - name: health
-    description: Health operations
+    description: 헬스체크
+  - name: auth
+    description: 인증 관련
+  - name: users
+    description: 유저 관련
+  - name: game
+    description: 게임 상태 관련
+  - name: servers
+    description: 게임 서버 관련
+  - name: shop
+    description: 상점 관련
+  - name: leaderboard
+    description: 명예의 전당
+  - name: admin
+    description: 관리자 전용
+  - name: reports
+    description: 신고 시스템
+  - name: chat
+    description: 채팅 로그
+  - name: guestbook
+    description: 방명록
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
-      summary: Health check
-      description: Returns server health status
+      summary: 헬스체크
       responses:
         "200":
-          description: Healthy
+          description: 정상
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ───────────────── AUTH ─────────────────
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: 회원가입
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterBody"
+      responses:
+        "201":
+          description: 가입 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: 잘못된 요청
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: 로그인
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: 로그인 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: 인증 실패
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: 로그아웃
+      responses:
+        "200":
+          description: 로그아웃 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: 현재 로그인한 유저 정보
+      responses:
+        "200":
+          description: 유저 정보
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: 미인증
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ───────────────── USERS ─────────────────
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: 유저 목록 (관리자용)
+      responses:
+        "200":
+          description: 유저 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserWithPassword"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: 특정 유저 조회
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 유저 정보
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: 유저 없음
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: 유저 정보 수정
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: 수정된 유저
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: 유저 삭제
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: 삭제 완료
+
+  /users/{id}/ban:
+    post:
+      operationId: banUser
+      tags: [users]
+      summary: 유저 채팅 금지/해제
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BanUserBody"
+      responses:
+        "200":
+          description: 처리 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /users/{id}/inventory:
+    get:
+      operationId: getUserInventory
+      tags: [users]
+      summary: 유저 인벤토리 조회
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 인벤토리 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryItem"
+    delete:
+      operationId: clearUserInventory
+      tags: [users]
+      summary: 유저 인벤토리 초기화 (관리자)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 초기화 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # ───────────────── GAME ─────────────────
+  /game/state:
+    get:
+      operationId: getGameState
+      tags: [game]
+      summary: 내 게임 상태 조회
+      responses:
+        "200":
+          description: 게임 상태
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameState"
+    patch:
+      operationId: updateGameState
+      tags: [game]
+      summary: 게임 상태 저장
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGameStateBody"
+      responses:
+        "200":
+          description: 저장된 상태
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameState"
+
+  /game/upgrades:
+    get:
+      operationId: listUpgrades
+      tags: [game]
+      summary: 업그레이드 목록
+      responses:
+        "200":
+          description: 업그레이드 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Upgrade"
+
+  /game/upgrades/{upgradeId}/purchase:
+    post:
+      operationId: purchaseUpgrade
+      tags: [game]
+      summary: 업그레이드 구매
+      parameters:
+        - name: upgradeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 구매 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameState"
+        "400":
+          description: 잔액 부족 또는 이미 구매함
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /game/snapshot:
+    get:
+      operationId: listSnapshots
+      tags: [game]
+      summary: DB 스냅샷 목록
+      responses:
+        "200":
+          description: 스냅샷 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Snapshot"
+    post:
+      operationId: createSnapshot
+      tags: [game]
+      summary: 스냅샷 생성
+      responses:
+        "201":
+          description: 스냅샷 생성됨
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Snapshot"
+
+  /game/snapshot/{snapshotId}/rollback:
+    post:
+      operationId: rollbackSnapshot
+      tags: [game]
+      summary: 스냅샷으로 롤백
+      parameters:
+        - name: snapshotId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 롤백 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # ───────────────── SERVERS ─────────────────
+  /servers:
+    get:
+      operationId: listServers
+      tags: [servers]
+      summary: 게임 서버 목록
+      responses:
+        "200":
+          description: 서버 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GameServer"
+    post:
+      operationId: createServer
+      tags: [servers]
+      summary: 서버 생성
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServerBody"
+      responses:
+        "201":
+          description: 서버 생성됨
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameServer"
+
+  /servers/{serverId}:
+    get:
+      operationId: getServer
+      tags: [servers]
+      summary: 서버 정보 조회
+      parameters:
+        - name: serverId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 서버 정보
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameServer"
+    patch:
+      operationId: updateServer
+      tags: [servers]
+      summary: 서버 설정 변경
+      parameters:
+        - name: serverId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateServerBody"
+      responses:
+        "200":
+          description: 수정된 서버
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameServer"
+    delete:
+      operationId: deleteServer
+      tags: [servers]
+      summary: 서버 삭제
+      parameters:
+        - name: serverId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: 삭제 완료
+
+  /servers/stats:
+    get:
+      operationId: getServerStats
+      tags: [servers]
+      summary: 서버 통계 (관리자 대시보드용)
+      responses:
+        "200":
+          description: 서버 통계
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerStats"
+
+  # ───────────────── SHOP ─────────────────
+  /shop/items:
+    get:
+      operationId: listShopItems
+      tags: [shop]
+      summary: 상점 아이템 목록
+      responses:
+        "200":
+          description: 아이템 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ShopItem"
+
+  /shop/buy:
+    post:
+      operationId: buyShopItem
+      tags: [shop]
+      summary: 아이템 구매
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BuyItemBody"
+      responses:
+        "200":
+          description: 구매 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: 잔액 부족 또는 이미 보유
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /shop/equip:
+    post:
+      operationId: equipSkin
+      tags: [shop]
+      summary: 스킨 장착
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EquipSkinBody"
+      responses:
+        "200":
+          description: 장착 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # ───────────────── LEADERBOARD ─────────────────
+  /leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [leaderboard]
+      summary: 명예의 전당 조회
+      responses:
+        "200":
+          description: 상위 유저 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaderboardEntry"
+
+  # ───────────────── ADMIN ─────────────────
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: 관리자 대시보드 통계
+      responses:
+        "200":
+          description: 통계 데이터
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/logs:
+    get:
+      operationId: getAdminLogs
+      tags: [admin]
+      summary: 서버 로그 목록
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: type
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 로그 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LogEntry"
+
+  /admin/announce:
+    post:
+      operationId: sendAnnouncement
+      tags: [admin]
+      summary: 전체 공지 전송
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnouncementBody"
+      responses:
+        "200":
+          description: 전송 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /admin/world-settings:
+    get:
+      operationId: getWorldSettings
+      tags: [admin]
+      summary: 월드 설정 조회
+      responses:
+        "200":
+          description: 월드 설정
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorldSettings"
+    patch:
+      operationId: updateWorldSettings
+      tags: [admin]
+      summary: 월드 설정 변경
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorldSettings"
+      responses:
+        "200":
+          description: 변경된 설정
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorldSettings"
+
+  /admin/anomalies:
+    get:
+      operationId: getAnomalies
+      tags: [admin]
+      summary: 이상 현상 로그
+      responses:
+        "200":
+          description: 이상 현상 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AnomalyLog"
+
+  # ───────────────── REPORTS ─────────────────
+  /reports:
+    get:
+      operationId: listReports
+      tags: [reports]
+      summary: 신고 목록
+      responses:
+        "200":
+          description: 신고 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Report"
+    post:
+      operationId: createReport
+      tags: [reports]
+      summary: 신고 접수
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReportBody"
+      responses:
+        "201":
+          description: 신고 접수됨
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+
+  /reports/{reportId}:
+    patch:
+      operationId: updateReport
+      tags: [reports]
+      summary: 신고 상태 변경 (관리자)
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReportBody"
+      responses:
+        "200":
+          description: 변경된 신고
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+
+  # ───────────────── CHAT ─────────────────
+  /chat/logs:
+    get:
+      operationId: getChatLogs
+      tags: [chat]
+      summary: 채팅 로그 조회
+      parameters:
+        - name: channel
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: 채팅 로그
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatMessage"
+
+  # ───────────────── GUESTBOOK ─────────────────
+  /guestbook:
+    get:
+      operationId: getGuestbookMessages
+      tags: [guestbook]
+      summary: 방명록 메시지 조회
+      responses:
+        "200":
+          description: 방명록 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GuestbookMessage"
+    post:
+      operationId: createGuestbookMessage
+      tags: [guestbook]
+      summary: 방명록 작성
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGuestbookBody"
+      responses:
+        "201":
+          description: 작성 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuestbookMessage"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +788,502 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    # ── Auth Schemas ──
+    RegisterBody:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        nickname:
+          type: string
+      required: [username, password, nickname]
+
+    LoginBody:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+      required: [username, password]
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+      required: [token, user]
+
+    # ── User Schemas ──
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        nickname:
+          type: string
+        role:
+          type: string
+        currency:
+          type: integer
+        equippedSkin:
+          type: ["string", "null"]
+        isBanned:
+          type: boolean
+        totalScore:
+          type: integer
+        playtime:
+          type: integer
+        createdAt:
+          type: string
+      required: [id, username, nickname, role, currency, isBanned, totalScore, playtime, createdAt]
+
+    UserWithPassword:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        nickname:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+        currency:
+          type: integer
+        equippedSkin:
+          type: ["string", "null"]
+        isBanned:
+          type: boolean
+        totalScore:
+          type: integer
+        playtime:
+          type: integer
+        createdAt:
+          type: string
+      required: [id, username, nickname, password, role, currency, isBanned, totalScore, playtime, createdAt]
+
+    UpdateUserBody:
+      type: object
+      properties:
+        nickname:
+          type: string
+        role:
+          type: string
+        currency:
+          type: integer
+
+    BanUserBody:
+      type: object
+      properties:
+        banned:
+          type: boolean
+      required: [banned]
+
+    InventoryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        itemId:
+          type: string
+        itemType:
+          type: string
+        acquiredAt:
+          type: string
+      required: [id, itemId, itemType, acquiredAt]
+
+    # ── Game Schemas ──
+    GameState:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        level:
+          type: integer
+        currency:
+          type: integer
+        upgrades:
+          type: object
+        position:
+          type: object
+        stats:
+          type: object
+        updatedAt:
+          type: string
+      required: [id, userId, level, currency, upgrades, position, stats, updatedAt]
+
+    UpdateGameStateBody:
+      type: object
+      properties:
+        level:
+          type: integer
+        currency:
+          type: integer
+        upgrades:
+          type: object
+        position:
+          type: object
+        stats:
+          type: object
+
+    Upgrade:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        cost:
+          type: integer
+        category:
+          type: string
+        maxLevel:
+          type: integer
+        effect:
+          type: object
+      required: [id, name, description, cost, category, maxLevel, effect]
+
+    Snapshot:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        data:
+          type: object
+        createdAt:
+          type: string
+      required: [id, userId, data, createdAt]
+
+    # ── Server Schemas ──
+    GameServer:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        ownerId:
+          type: integer
+        ownerNickname:
+          type: string
+        mode:
+          type: string
+        maxPlayers:
+          type: integer
+        currentPlayers:
+          type: integer
+        isPublic:
+          type: boolean
+        complexity:
+          type: integer
+        trapRate:
+          type: number
+        mapWarp:
+          type: boolean
+        status:
+          type: string
+        createdAt:
+          type: string
+      required: [id, name, ownerId, mode, maxPlayers, currentPlayers, isPublic, complexity, trapRate, mapWarp, status, createdAt]
+
+    CreateServerBody:
+      type: object
+      properties:
+        name:
+          type: string
+        mode:
+          type: string
+        maxPlayers:
+          type: integer
+        isPublic:
+          type: boolean
+        complexity:
+          type: integer
+        trapRate:
+          type: number
+        mapWarp:
+          type: boolean
+      required: [name, mode]
+
+    UpdateServerBody:
+      type: object
+      properties:
+        name:
+          type: string
+        maxPlayers:
+          type: integer
+        isPublic:
+          type: boolean
+        complexity:
+          type: integer
+        trapRate:
+          type: number
+        mapWarp:
+          type: boolean
+        status:
+          type: string
+
+    ServerStats:
+      type: object
+      properties:
+        totalServers:
+          type: integer
+        activeServers:
+          type: integer
+        totalPlayers:
+          type: integer
+        onlinePlayers:
+          type: integer
+      required: [totalServers, activeServers, totalPlayers, onlinePlayers]
+
+    # ── Shop Schemas ──
+    ShopItem:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+        price:
+          type: integer
+        rarity:
+          type: string
+        color:
+          type: string
+        adminOnly:
+          type: boolean
+      required: [id, name, description, type, price, rarity, adminOnly]
+
+    BuyItemBody:
+      type: object
+      properties:
+        itemId:
+          type: string
+      required: [itemId]
+
+    EquipSkinBody:
+      type: object
+      properties:
+        itemId:
+          type: ["string", "null"]
+      required: [itemId]
+
+    # ── Leaderboard ──
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank:
+          type: integer
+        userId:
+          type: integer
+        nickname:
+          type: string
+        totalScore:
+          type: integer
+        playtime:
+          type: integer
+        equippedSkin:
+          type: ["string", "null"]
+      required: [rank, userId, nickname, totalScore, playtime]
+
+    # ── Admin Schemas ──
+    AdminStats:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+        onlineUsers:
+          type: integer
+        totalServers:
+          type: integer
+        activeServers:
+          type: integer
+        totalCurrencyCirculating:
+          type: integer
+        totalReports:
+          type: integer
+        pendingReports:
+          type: integer
+        recentSignups:
+          type: integer
+      required: [totalUsers, onlineUsers, totalServers, activeServers, totalCurrencyCirculating, totalReports, pendingReports, recentSignups]
+
+    LogEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        message:
+          type: string
+        userId:
+          type: ["integer", "null"]
+        metadata:
+          type: object
+        createdAt:
+          type: string
+      required: [id, type, message, createdAt]
+
+    AnnouncementBody:
+      type: object
+      properties:
+        message:
+          type: string
+        channel:
+          type: string
+      required: [message]
+
+    WorldSettings:
+      type: object
+      properties:
+        complexity:
+          type: integer
+        wallThickness:
+          type: number
+        trapRate:
+          type: number
+        mapWarp:
+          type: boolean
+        entitySpawnRate:
+          type: number
+        ambientDarkness:
+          type: number
+        glitchFrequency:
+          type: number
+      required: [complexity, wallThickness, trapRate, mapWarp, entitySpawnRate, ambientDarkness, glitchFrequency]
+
+    AnomalyLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        nickname:
+          type: string
+        type:
+          type: string
+        detail:
+          type: string
+        severity:
+          type: string
+        createdAt:
+          type: string
+      required: [id, userId, nickname, type, detail, severity, createdAt]
+
+    # ── Reports ──
+    Report:
+      type: object
+      properties:
+        id:
+          type: integer
+        reporterId:
+          type: integer
+        reporterNickname:
+          type: string
+        targetNickname:
+          type: string
+        reason:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+      required: [id, reporterId, targetNickname, reason, status, createdAt]
+
+    CreateReportBody:
+      type: object
+      properties:
+        targetNickname:
+          type: string
+        reason:
+          type: string
+      required: [targetNickname, reason]
+
+    UpdateReportBody:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    # ── Chat ──
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        nickname:
+          type: string
+        channel:
+          type: string
+        message:
+          type: string
+        createdAt:
+          type: string
+      required: [id, userId, nickname, channel, message, createdAt]
+
+    # ── Guestbook ──
+    GuestbookMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        nickname:
+          type: string
+        message:
+          type: string
+        wallId:
+          type: string
+        createdAt:
+          type: string
+      required: [id, userId, nickname, message, wallId, createdAt]
+
+    CreateGuestbookBody:
+      type: object
+      properties:
+        message:
+          type: string
+        wallId:
+          type: string
+      required: [message, wallId]
