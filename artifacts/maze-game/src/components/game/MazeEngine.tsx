@@ -2,10 +2,29 @@
 import { useEffect, useRef, useCallback } from "react";
 import * as THREE from "three";
 
+export interface FlashlightConfig {
+  color: number;
+  intensity: number;
+  distance: number;
+  angle: number;
+  penumbra: number;
+}
+
+// 손전등 종류별 속성 정의
+export const FLASHLIGHT_PRESETS: Record<string, FlashlightConfig> = {
+  default:              { color: 0xffffff, intensity: 3,   distance: 15, angle: Math.PI / 8,  penumbra: 0.5 },
+  flashlight_basic:     { color: 0xfff9c4, intensity: 2.5, distance: 12, angle: Math.PI / 9,  penumbra: 0.6 },
+  flashlight_wide:      { color: 0xfff3e0, intensity: 3.5, distance: 18, angle: Math.PI / 5,  penumbra: 0.3 },
+  flashlight_uv:        { color: 0xce93d8, intensity: 4,   distance: 14, angle: Math.PI / 8,  penumbra: 0.2 },
+  flashlight_dreamcore: { color: 0xffe57f, intensity: 4.5, distance: 22, angle: Math.PI / 7,  penumbra: 0.4 },
+};
+
 interface MazeEngineProps {
   serverId?: number | null;
   complexity?: number;
+  equippedFlashlight?: string | null;
   onPositionChange?: (pos: { x: number; y: number; z: number; mapId: string }) => void;
+  onFlashlightChange?: (on: boolean) => void;
 }
 
 interface MazeCell {
@@ -70,11 +89,15 @@ const CELL_SIZE = 4;
 const WALL_HEIGHT = 3;
 const WALL_THICKNESS = 0.15;
 
-export default function MazeEngine({ serverId, complexity = 5, onPositionChange }: MazeEngineProps) {
+export default function MazeEngine({
+  serverId,
+  complexity = 5,
+  equippedFlashlight,
+  onPositionChange,
+  onFlashlightChange,
+}: MazeEngineProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const sceneRef = useRef<THREE.Scene | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const animFrameRef = useRef<number>(0);
   const keysRef = useRef<Record<string, boolean>>({});
   const playerRef = useRef({ x: CELL_SIZE / 2, y: 1.6, z: CELL_SIZE / 2, yaw: 0 });
@@ -82,6 +105,8 @@ export default function MazeEngine({ serverId, complexity = 5, onPositionChange 
   const lastMouseRef = useRef({ x: 0, y: 0 });
   const flickerRef = useRef<THREE.PointLight[]>([]);
   const entityRef = useRef<THREE.Mesh[]>([]);
+  const flashlightRef = useRef<THREE.SpotLight | null>(null);
+  const flashlightOnRef = useRef<boolean>(true);
 
   const initScene = useCallback(() => {
     if (!mountRef.current) return;
@@ -104,40 +129,25 @@ export default function MazeEngine({ serverId, complexity = 5, onPositionChange 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x020008);
     scene.fog = new THREE.FogExp2(0x020008, 0.08);
-    sceneRef.current = scene;
 
     // 카메라
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 100);
     camera.position.set(CELL_SIZE / 2, 1.6, CELL_SIZE / 2);
-    cameraRef.current = camera;
 
-    // 미로 크기 계산 (복잡도 기반)
+    // 미로 크기
     const mazeW = 8 + complexity * 2;
     const mazeH = 8 + complexity * 2;
     const maze = generateMaze(mazeW, mazeH);
 
     // 재료들
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x0a0818,
-      roughness: 0.9,
-      metalness: 0.1,
-    });
-    const ceilMat = new THREE.MeshStandardMaterial({
-      color: 0x060410,
-      roughness: 1.0,
-      metalness: 0.0,
-    });
-    const wallMat = new THREE.MeshStandardMaterial({
-      color: 0x0f0b1e,
-      roughness: 0.85,
-      metalness: 0.05,
-    });
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x0a0818, roughness: 0.9, metalness: 0.1 });
+    const ceilMat  = new THREE.MeshStandardMaterial({ color: 0x060410, roughness: 1.0, metalness: 0.0 });
+    const wallMat  = new THREE.MeshStandardMaterial({ color: 0x0f0b1e, roughness: 0.85, metalness: 0.05 });
 
     // 바닥 & 천장
     const totalW = mazeW * CELL_SIZE;
     const totalH = mazeH * CELL_SIZE;
-    const floorGeo = new THREE.PlaneGeometry(totalW, totalH);
-    const floor = new THREE.Mesh(floorGeo, floorMat);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(totalW, totalH), floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(totalW / 2, 0, totalH / 2);
     floor.receiveShadow = true;
@@ -149,10 +159,8 @@ export default function MazeEngine({ serverId, complexity = 5, onPositionChange 
     scene.add(ceiling);
 
     // 벽 생성
-    const wallGeo = {
-      horizontal: new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS),
-      vertical: new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE + WALL_THICKNESS),
-    };
+    const wallGeoH = new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS);
+    const wallGeoV = new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE + WALL_THICKNESS);
 
     for (let z = 0; z < mazeH; z++) {
       for (let x = 0; x < mazeW; x++) {
@@ -161,28 +169,25 @@ export default function MazeEngine({ serverId, complexity = 5, onPositionChange 
         const cz = z * CELL_SIZE;
 
         if (cell.walls.top) {
-          const wall = new THREE.Mesh(wallGeo.horizontal, wallMat);
+          const wall = new THREE.Mesh(wallGeoH, wallMat);
           wall.position.set(cx + CELL_SIZE / 2, WALL_HEIGHT / 2, cz);
-          wall.castShadow = true;
-          wall.receiveShadow = true;
+          wall.castShadow = true; wall.receiveShadow = true;
           scene.add(wall);
         }
         if (cell.walls.left) {
-          const wall = new THREE.Mesh(wallGeo.vertical, wallMat);
+          const wall = new THREE.Mesh(wallGeoV, wallMat);
           wall.position.set(cx, WALL_HEIGHT / 2, cz + CELL_SIZE / 2);
-          wall.castShadow = true;
-          wall.receiveShadow = true;
+          wall.castShadow = true; wall.receiveShadow = true;
           scene.add(wall);
         }
-        // 마지막 행/열 닫기
         if (z === mazeH - 1 && cell.walls.bottom) {
-          const wall = new THREE.Mesh(wallGeo.horizontal, wallMat);
+          const wall = new THREE.Mesh(wallGeoH, wallMat);
           wall.position.set(cx + CELL_SIZE / 2, WALL_HEIGHT / 2, cz + CELL_SIZE);
           wall.castShadow = true;
           scene.add(wall);
         }
         if (x === mazeW - 1 && cell.walls.right) {
-          const wall = new THREE.Mesh(wallGeo.vertical, wallMat);
+          const wall = new THREE.Mesh(wallGeoV, wallMat);
           wall.position.set(cx + CELL_SIZE, WALL_HEIGHT / 2, cz + CELL_SIZE / 2);
           wall.castShadow = true;
           scene.add(wall);
@@ -199,22 +204,20 @@ export default function MazeEngine({ serverId, complexity = 5, onPositionChange 
 
       const light = new THREE.PointLight(0x9966ff, 1.2, 12);
       light.position.set(lx, WALL_HEIGHT - 0.2, lz);
-      light.castShadow = false;
       scene.add(light);
       flickerLights.push(light);
 
-      // 형광등 메시
-      const tubeGeo = new THREE.BoxGeometry(0.8, 0.05, 0.1);
-      const tubeMat = new THREE.MeshBasicMaterial({ color: 0xccaaff });
-      const tube = new THREE.Mesh(tubeGeo, tubeMat);
+      const tube = new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 0.05, 0.1),
+        new THREE.MeshBasicMaterial({ color: 0xccaaff })
+      );
       tube.position.set(lx, WALL_HEIGHT - 0.05, lz);
       scene.add(tube);
     }
     flickerRef.current = flickerLights;
 
-    // 약한 주변광
-    const ambient = new THREE.AmbientLight(0x0a0520, 0.3);
-    scene.add(ambient);
+    // 주변광
+    scene.add(new THREE.AmbientLight(0x0a0520, 0.3));
 
     // 엔티티 (Peeker)
     const entityCount = Math.floor(complexity * 0.5);
@@ -229,11 +232,19 @@ export default function MazeEngine({ serverId, complexity = 5, onPositionChange 
       entityRef.current.push(entity);
     }
 
-    // 손전등 (플레이어 부착)
-    const flashlight = new THREE.SpotLight(0xffffff, 3, 15, Math.PI / 8, 0.5, 1.5);
+    // 손전등 설정 (장착 아이템 기반)
+    const preset = FLASHLIGHT_PRESETS[equippedFlashlight ?? "default"] ?? FLASHLIGHT_PRESETS["default"];
+    const flashlight = new THREE.SpotLight(
+      preset.color, preset.intensity, preset.distance,
+      preset.angle, preset.penumbra, 1.5
+    );
     flashlight.castShadow = false;
     scene.add(flashlight);
     scene.add(flashlight.target);
+    flashlightRef.current = flashlight;
+
+    // UV 손전등이면 엔티티 색상을 드러냄
+    const isUV = equippedFlashlight === "flashlight_uv";
 
     // 애니메이션 루프
     let t = 0;
@@ -255,22 +266,10 @@ export default function MazeEngine({ serverId, complexity = 5, onPositionChange 
       const cos = Math.cos(player.yaw);
       const sin = Math.sin(player.yaw);
 
-      if (keys["w"] || keys["arrowup"]) {
-        player.x += cos * SPEED;
-        player.z += sin * SPEED;
-      }
-      if (keys["s"] || keys["arrowdown"]) {
-        player.x -= cos * SPEED;
-        player.z -= sin * SPEED;
-      }
-      if (keys["a"] || keys["arrowleft"]) {
-        player.x += sin * SPEED;
-        player.z -= cos * SPEED;
-      }
-      if (keys["d"] || keys["arrowright"]) {
-        player.x -= sin * SPEED;
-        player.z += cos * SPEED;
-      }
+      if (keys["w"] || keys["arrowup"])    { player.x += cos * SPEED; player.z += sin * SPEED; }
+      if (keys["s"] || keys["arrowdown"])  { player.x -= cos * SPEED; player.z -= sin * SPEED; }
+      if (keys["a"] || keys["arrowleft"])  { player.x += sin * SPEED; player.z -= cos * SPEED; }
+      if (keys["d"] || keys["arrowright"]) { player.x -= sin * SPEED; player.z += cos * SPEED; }
 
       // 카메라 업데이트
       camera.position.set(player.x, player.y, player.z);
@@ -278,14 +277,19 @@ export default function MazeEngine({ serverId, complexity = 5, onPositionChange 
       camera.rotation.y = -player.yaw;
       camera.rotation.x = 0;
 
-      // 손전등 위치
-      flashlight.position.copy(camera.position);
-      const dir = new THREE.Vector3(-sin, -0.1, -cos).normalize();
-      flashlight.target.position.copy(camera.position).addScaledVector(dir, 10);
-      flashlight.target.updateMatrixWorld();
+      // 손전등 위치 업데이트
+      const fl = flashlightRef.current;
+      if (fl) {
+        const isOn = flashlightOnRef.current;
+        fl.intensity = isOn ? preset.intensity : 0;
+        fl.position.copy(camera.position);
+        const dir = new THREE.Vector3(-sin, -0.1, -cos).normalize();
+        fl.target.position.copy(camera.position).addScaledVector(dir, 10);
+        fl.target.updateMatrixWorld();
+      }
 
-      // 엔티티 스토킹 (Stalker AI)
-      entityRef.current.forEach((entity, i) => {
+      // 엔티티 AI
+      entityRef.current.forEach((entity) => {
         const dx = player.x - entity.position.x;
         const dz = player.z - entity.position.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
@@ -293,10 +297,18 @@ export default function MazeEngine({ serverId, complexity = 5, onPositionChange 
           entity.position.x += (dx / dist) * 0.01;
           entity.position.z += (dz / dist) * 0.01;
         }
-        (entity.material as THREE.MeshBasicMaterial).opacity = dist < 8 ? 0.5 + Math.sin(t * 3) * 0.2 : 0;
+        const mat = entity.material as THREE.MeshBasicMaterial;
+        if (isUV && dist < preset.distance) {
+          // UV 손전등: 가까운 엔티티를 강조
+          mat.color.set(0xff00ff);
+          mat.opacity = 0.9;
+        } else {
+          mat.color.set(0x220033);
+          mat.opacity = dist < 8 ? 0.5 + Math.sin(t * 3) * 0.2 : 0;
+        }
       });
 
-      // 위치 콜백 (매 60프레임마다)
+      // 위치 콜백
       if (Math.round(t * 60) % 60 === 0 && onPositionChange) {
         onPositionChange({ x: player.x, y: player.y, z: player.z, mapId: `server_${serverId || "solo"}` });
       }
@@ -306,7 +318,7 @@ export default function MazeEngine({ serverId, complexity = 5, onPositionChange 
 
     animate();
 
-    // 리사이즈 핸들러
+    // 리사이즈
     const onResize = () => {
       if (!mountRef.current) return;
       const w = mountRef.current.clientWidth;
@@ -320,13 +332,20 @@ export default function MazeEngine({ serverId, complexity = 5, onPositionChange 
     return () => {
       window.removeEventListener("resize", onResize);
     };
-  }, [complexity, serverId, onPositionChange]);
+  }, [complexity, serverId, equippedFlashlight, onPositionChange]);
 
   useEffect(() => {
     const cleanup = initScene();
 
     const onKeyDown = (e: KeyboardEvent) => {
-      keysRef.current[e.key.toLowerCase()] = true;
+      const key = e.key.toLowerCase();
+      keysRef.current[key] = true;
+
+      // F키: 손전등 토글
+      if (key === "f") {
+        flashlightOnRef.current = !flashlightOnRef.current;
+        onFlashlightChange?.(flashlightOnRef.current);
+      }
     };
     const onKeyUp = (e: KeyboardEvent) => {
       keysRef.current[e.key.toLowerCase()] = false;
@@ -358,10 +377,11 @@ export default function MazeEngine({ serverId, complexity = 5, onPositionChange 
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
       if (mountRef.current && rendererRef.current) {
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         mountRef.current.removeChild(rendererRef.current.domElement);
       }
     };
-  }, [initScene]);
+  }, [initScene, onFlashlightChange]);
 
   return (
     <div
