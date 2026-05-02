@@ -354,7 +354,7 @@ export default function MazeEngine({
       }
 
       // 점프 (스페이스)
-      const wantJump = keys[" "] || keys["space"];
+      const wantJump = keys["shift"] || keys["shiftleft"] || keys["shiftright"];
       if (wantJump && player.onGround && !jumpPressedRef.current) {
         player.velY = JUMP_POWER;
         player.onGround = false;
@@ -535,7 +535,7 @@ export default function MazeEngine({
             <div className="grid grid-cols-2 gap-x-8 gap-y-1.5 text-xs text-white/50 text-left">
               <span><span className="text-white/80 font-mono bg-white/10 px-1.5 py-0.5 rounded mr-1">WASD</span> 이동</span>
               <span><span className="text-white/80 font-mono bg-white/10 px-1.5 py-0.5 rounded mr-1">마우스</span> 시점</span>
-              <span><span className="text-white/80 font-mono bg-white/10 px-1.5 py-0.5 rounded mr-1">Space</span> 점프</span>
+              <span><span className="text-white/80 font-mono bg-white/10 px-1.5 py-0.5 rounded mr-1">Shift</span> 점프</span>
               <span><span className="text-white/80 font-mono bg-white/10 px-1.5 py-0.5 rounded mr-1">F</span> 손전등</span>
               <span><span className="text-white/80 font-mono bg-white/10 px-1.5 py-0.5 rounded mr-1">ESC</span> 해제</span>
               <span><span className="text-white/80 font-mono bg-white/10 px-1.5 py-0.5 rounded mr-1">V</span> 2D 맵</span>
