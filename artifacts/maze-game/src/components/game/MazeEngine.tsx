@@ -23,8 +23,8 @@ const SPEED    = 5.5;
 const BASE_SENS = 0.002;
 const MAX_PITCH = Math.PI / 2 - 0.04;
 const GAZE_DEATH_TIME = 2.25; // 초 (눈 응시 사망 시간)
-const DIM2_MW = 8; // 차원2 미로 너비
-const DIM2_MH = 8; // 차원2 미로 높이
+const DIM2_MW = 12; // 차원2 미로 너비
+const DIM2_MH = 12; // 차원2 미로 높이
 const BALL_FRICTION = 0.88; // 비치볼 마찰 계수 (프레임당)
 const ENTITY_SPEED  = 0.9;  // 엔티티 이동 속도
 
@@ -123,7 +123,7 @@ function makeGrassTex(): THREE.DataTexture {
   return makeDataTex((x,y,s) => {
     const n = ((Math.sin(x*0.7+y*0.4)*0.5+0.5)*28)|0;
     const v = ((Math.cos(x*0.3+y*0.9)*0.5+0.5)*18)|0;
-    return [40+n, 160+v, 50+n];
+    return [28+n, 126+v, 36+n];
   });
 }
 
@@ -246,11 +246,13 @@ function buildDim1(complexity: number, equippedFlashlight: string | null): Dim1D
   if (mV.length>0){ const im=new THREE.InstancedMesh(wallGeoV,wallMat,mV.length); mV.forEach((m,i)=>im.setMatrixAt(i,m)); im.instanceMatrix.needsUpdate=true; scene.add(im); }
 
   // 조명
-  const ambientLight = new THREE.AmbientLight(0xd4c47a, 0.6);
+  const ambientLight = new THREE.AmbientLight(0xd4c47a, 0.44);
   scene.add(ambientLight);
-  for (let z = 0; z < mh; z+=3) for (let x = 0; x < mw; x+=3) {
-    const pl = new THREE.PointLight(0xf5e8a0,1.6,CELL*4,1.8);
+  for (let z = 0; z < mh; z+=2) for (let x = 0; x < mw; x+=2) {
+    const pl = new THREE.PointLight(0xf5e8a0,1.0 + Math.random() * 0.9,CELL*4,1.8);
     pl.position.set(x*CELL+CELL/2, H_WALL-0.1, z*CELL+CELL/2);
+    pl.userData.baseIntensity = pl.intensity;
+    pl.userData.phase = Math.random() * Math.PI * 2;
     scene.add(pl);
   }
 
@@ -387,6 +389,8 @@ interface BeachBallData {
   radius: number;
   collected: boolean;
 }
+
+const BALL_COLORS = [0xff3344, 0x2255ee, 0xffcc00, 0xff66bb, 0x33ee88, 0xff7700, 0x9933ff, 0x00ccff];
 
 interface EntityDim2Data {
   group: THREE.Group;
@@ -555,7 +559,7 @@ function buildDim2(): Dim2Data {
     scene.add(ballGroup);
     balls.push({ group: ballGroup, vel: new THREE.Vector3(), radius, collected: false });
   };
-  for (let i = 0; i < 96; i++) {
+  for (let i = 0; i < 240; i++) {
     const cx = 1 + (i * 3) % (DIM2_MW - 1);
     const cz = 1 + (i * 5) % (DIM2_MH - 1);
     makeBall(cx * CELL + CELL / 2, cz * CELL + CELL / 2, 0.38 + (i % 3) * 0.06, BALL_COLORS[i % BALL_COLORS.length]);
@@ -917,6 +921,25 @@ export default function MazeEngine({
             if (spd2D > 0.01) {
               ball.group.rotation.z -= ball.vel.x * dt * (1 / ball.radius) * 0.5;
               ball.group.rotation.x += ball.vel.z * dt * (1 / ball.radius) * 0.5;
+            }
+          }
+          if (d2.balls.length < 300) {
+            for (let s = 0; s < 4; s++) {
+              const sx = Math.random() * mazeWd;
+              const sz = Math.random() * mazeHt;
+              if (hitsWall(d2.wallBoxes, sx, sz)) continue;
+              const radius = 0.34 + Math.random() * 0.16;
+              const col = BALL_COLORS[(Math.random() * BALL_COLORS.length) | 0];
+              const ballGroup = new THREE.Group();
+              ballGroup.add(new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 12), new THREE.MeshLambertMaterial({ color: col })));
+              for (let si = 0; si < 3; si++) {
+                const stripe = new THREE.Mesh(new THREE.TorusGeometry(radius * 1.007, 0.018, 6, 24), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+                stripe.rotation.x = (si * Math.PI / 3);
+                ballGroup.add(stripe);
+              }
+              ballGroup.position.set(sx, radius, sz);
+              d2.scene.add(ballGroup);
+              d2.balls.push({ group: ballGroup, vel: new THREE.Vector3(), radius, collected: false });
             }
           }
 
