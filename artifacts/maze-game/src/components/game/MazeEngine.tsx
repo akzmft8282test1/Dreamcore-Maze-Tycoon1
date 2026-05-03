@@ -9,6 +9,9 @@ interface MazeEngineProps {
   complexity?: number;
   equippedFlashlight?: string | null;
   pointerSensitivity?: number;
+  initialPart?: number | null;
+  onDoorZoneChange?: (zone: number | null) => void;
+  onRoomChange?: (room: number | null) => void;
   onPositionChange?: (pos: { x: number; y: number; z: number; mapId: string }) => void;
   onFlashlightChange?: (on: boolean) => void;
 }
@@ -207,6 +210,7 @@ interface Dim1Data {
   doorGroup: THREE.Group | null;
   doorWorldPos: THREE.Vector3 | null;
   doorNormal: THREE.Vector3 | null;
+  doorZone?: number | null;
 }
 
 function buildDim1(complexity: number, equippedFlashlight: string | null): Dim1Data & { flashlight: THREE.SpotLight; ambientLight: THREE.AmbientLight } {
@@ -266,6 +270,7 @@ function buildDim1(complexity: number, equippedFlashlight: string | null): Dim1D
   let doorGroup: THREE.Group | null = null;
   let doorWorldPos: THREE.Vector3 | null = null;
   let doorNormal: THREE.Vector3 | null = null;
+  let doorZone: number | null = null;
 
   // 5% 확률로 문 생성 (dev: 강제 true)
   if (Math.random() < 0.05 || true) {
@@ -291,6 +296,7 @@ function buildDim1(complexity: number, equippedFlashlight: string | null): Dim1D
       const wz = pick.dir === 'h'
         ? pick.wallZ * CELL
         : pick.wallZ * CELL + CELL / 2;
+      doorZone = pick.wallZ * mw + pick.wallX + 1;
 
       const DW   = 1.2;   // 문 너비
       const DH   = 2.4;   // 문 높이
@@ -379,7 +385,7 @@ function buildDim1(complexity: number, equippedFlashlight: string | null): Dim1D
     }
   }
 
-  return { scene, wallBoxes, doorGroup, doorWorldPos, doorNormal, flashlight, ambientLight };
+  return { scene, wallBoxes, doorGroup, doorWorldPos, doorNormal, flashlight, ambientLight, doorZone };
 }
 
 // ─── 차원2 씬 데이터 타입 ────────────────────────────────────────────────────
@@ -599,6 +605,9 @@ export default function MazeEngine({
   complexity = 5,
   equippedFlashlight,
   pointerSensitivity = 1,
+  initialPart = null,
+  onDoorZoneChange,
+  onRoomChange,
   onPositionChange,
   onFlashlightChange,
 }: MazeEngineProps) {
@@ -628,6 +637,7 @@ export default function MazeEngine({
   const deadRef     = useRef(false);
   const dim2DataRef = useRef<Dim2Data|null>(null);
   const dim1DataRef = useRef<Dim1Data&{flashlight:THREE.SpotLight;ambientLight:THREE.AmbientLight}|null>(null);
+  const doorZoneRef = useRef<number | null>(null);
   const activeCameraRef = useRef<THREE.PerspectiveCamera|null>(null);
   const activeSceneRef  = useRef<THREE.Scene|null>(null);
   const doorStateRef    = useRef<'closed'|'unlocking'|'opening'|'open'>('closed');
@@ -659,6 +669,7 @@ export default function MazeEngine({
       activeSceneRef.current = dim1DataRef.current.scene;
       wallBoxRef.current = dim1DataRef.current.wallBoxes;
     }
+    onRoomChange?.(null);
   }, []);
 
   useEffect(() => {
@@ -681,6 +692,8 @@ export default function MazeEngine({
     // ── 두 차원 씬 빌드 ─────────────────────────────────────────────────────
     const d1 = buildDim1(complexity, equippedFlashlight ?? null);
     dim1DataRef.current = d1;
+    doorZoneRef.current = d1.doorZone ?? null;
+    onDoorZoneChange?.(d1.doorZone ?? null);
     const d2 = buildDim2();
     dim2DataRef.current = d2;
 
@@ -804,6 +817,7 @@ export default function MazeEngine({
         if (nearDoor && xKey && dstate === 'closed') {
           doorStateRef.current = 'unlocking';
           setDoorState('unlocking');
+          onDoorZoneChange?.(doorZoneRef.current);
         }
 
         // 문 애니메이션
@@ -836,12 +850,16 @@ export default function MazeEngine({
             dimRef.current = 2;
             setDimension(2);
             setShowDoorHint(false);
-            pos.x = Math.floor(DIM2_MW / 2) * CELL + CELL / 2;
-            pos.z = Math.floor(DIM2_MH / 2) * CELL + CELL / 2;
+            const targetPart = initialPart && initialPart > 0 ? initialPart : 1;
+            const tx = ((targetPart - 1) % DIM2_MW) * CELL + CELL / 2;
+            const tz = Math.floor((targetPart - 1) / DIM2_MW) * CELL + CELL / 2;
+            pos.x = Math.max(CELL / 2, Math.min(DIM2_MW * CELL - CELL / 2, tx));
+            pos.z = Math.max(CELL / 2, Math.min(DIM2_MH * CELL - CELL / 2, tz));
             yawRef.current = 0; pitchRef.current = 0;
             fallingRef.current = false; fallYRef.current = 0; fallSpeedRef.current = 0;
             activeSceneRef.current = d2.scene;
             wallBoxRef.current = d2.wallBoxes;
+            onRoomChange?.(targetPart);
           }
         }
       }
@@ -869,8 +887,12 @@ export default function MazeEngine({
             dim2DataRef.current = rebuilt;
             activeSceneRef.current = rebuilt.scene;
             wallBoxRef.current = rebuilt.wallBoxes;
-            pos.x = Math.floor(DIM2_MW / 2) * CELL + CELL / 2;
-            pos.z = Math.floor(DIM2_MH / 2) * CELL + CELL / 2;
+            const targetPart = initialPart && initialPart > 0 ? initialPart : 1;
+            const tx = ((targetPart - 1) % DIM2_MW) * CELL + CELL / 2;
+            const tz = Math.floor((targetPart - 1) / DIM2_MW) * CELL + CELL / 2;
+            pos.x = Math.max(CELL / 2, Math.min(DIM2_MW * CELL - CELL / 2, tx));
+            pos.z = Math.max(CELL / 2, Math.min(DIM2_MH * CELL - CELL / 2, tz));
+            onRoomChange?.(targetPart);
             return;
           }
         }
@@ -1012,6 +1034,11 @@ export default function MazeEngine({
       if (posTickRef.current >= 60 && onPositionChange) {
         posTickRef.current = 0;
         onPositionChange({ x:pos.x, y:P_HEIGHT, z:pos.z, mapId:`server_${serverId??'solo'}_dim${curDim}` });
+        if (curDim === 1) {
+          onRoomChange?.(Math.floor(pos.x / CELL) * 100 + Math.floor(pos.z / CELL) + 1);
+        } else {
+          onRoomChange?.(Math.floor(pos.x / CELL) * DIM2_MW + Math.floor(pos.z / CELL) + 1);
+        }
       }
 
       renderer.render(activeSceneRef.current!, camera);
