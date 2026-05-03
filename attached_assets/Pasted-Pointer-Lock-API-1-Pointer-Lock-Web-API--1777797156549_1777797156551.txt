@@ -1,0 +1,340 @@
+Pointer Lock API — 다른 에이전트가 바로 쓸 수 있는 완전 가이드
+1. 메커니즘 개요
+Pointer Lock은 브라우저 내장 Web API입니다. 별도 패키지 없이 동작합니다.
+
+일반 마우스 이벤트          Pointer Lock 활성화 후
+─────────────────          ────────────────────────
+e.clientX = 450  ← 절대좌표   e.movementX = -3  ← 델타(이동량)만
+e.clientY = 230             e.movementY =  1
+커서가 화면에 보임            커서 숨겨짐, 화면 밖으로 못 나감
+
+쓰는 이유: FPS 게임처럼 마우스를 무한정 움직여도 커서가 경계에 걸리지 않고, 순수한 이동량만 받아 카메라 회전에 쓸 수 있기 때문입니다.
+
+2. 필요한 패키지
+목적	패키지	설치
+3D 렌더링	three	npm install three
+Three.js 타입	@types/three	npm install -D @types/three
+React (선택)	react, react-dom	이미 있으면 생략
+Pointer Lock 자체	없음	브라우저 내장 Web API
+Pointer Lock은 외부 패키지가 전혀 필요 없습니다. element.requestPointerLock() 한 줄이 전부입니다.
+
+3. 핵심 구문 6개 — 이것만 알면 됩니다
+// ① 잠금 요청 — 반드시 클릭 등 사용자 이벤트 핸들러 안에서 호출해야 함
+//    (보안 정책: 사용자 행동 없이 자동으로 잠글 수 없음)
+element.requestPointerLock();
+// ② 잠금 해제 (ESC 키도 자동 해제)
+document.exitPointerLock();
+// ③ 현재 잠긴 요소 확인 (null이면 잠금 안 됨)
+document.pointerLockElement;
+// ④ 잠금 상태 변화 감지
+document.addEventListener('pointerlockchange', () => { ... });
+// ⑤ 잠금 실패 감지 (권한 거부 등)
+document.addEventListener('pointerlockerror', () => { ... });
+// ⑥ 마우스 이동량 읽기 — 잠금 중일 때만 의미 있음
+document.addEventListener('mousemove', (e) => {
+  e.movementX; // 이번 프레임 가로 이동 픽셀
+  e.movementY; // 이번 프레임 세로 이동 픽셀
+});
+
+4. 순수 JS 완전 예제 (Three.js 없이)
+<!DOCTYPE html>
+<html lang="ko">
+<head><meta charset="UTF-8"><title>Pointer Lock 데모</title></head>
+<body style="margin:0;background:#111;color:white;font-family:monospace">
+<canvas id="canvas"></canvas>
+<div id="overlay" style="
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,0.7);font-size:20px;text-align:center
+">
+  화면을 클릭하면 마우스가 잠깁니다<br>
+  <small style="font-size:14px;color:#aaa">ESC로 해제</small>
+</div>
+<script>
+const canvas  = document.getElementById('canvas');
+const overlay = document.getElementById('overlay');
+const ctx     = canvas.getContext('2d');
+canvas.width  = window.innerWidth;
+canvas.height = window.innerHeight;
+// ── 상태 변수 ────────────────────────────────────────
+let locked = false;
+let yaw    = 0;   // 좌우 누적 회전 (라디안)
+let pitch  = 0;   // 상하 누적 회전 (라디안)
+// ── ① 클릭 → 잠금 요청 ──────────────────────────────
+canvas.addEventListener('click', () => {
+  canvas.requestPointerLock();   // 핵심 구문 ①
+});
+// ── ④ 잠금 상태 변화 감지 ────────────────────────────
+document.addEventListener('pointerlockchange', () => {
+  locked = (document.pointerLockElement === canvas);  // 핵심 구문 ③
+  overlay.style.display = locked ? 'none' : 'flex';
+  if (!locked) overlay.innerHTML = '해제됨. 다시 클릭하세요.<br><small>ESC로 해제됨</small>';
+});
+// ── ⑤ 잠금 실패 ─────────────────────────────────────
+document.addEventListener('pointerlockerror', () => {
+  overlay.innerHTML = '⚠️ 포인터락 실패. 페이지를 새로고침하세요.';
+});
+// ── ⑥ 마우스 이동량 누적 ─────────────────────────────
+document.addEventListener('mousemove', (e) => {
+  if (!locked) return;
+  const SENSITIVITY = 0.003;           // 감도 (낮을수록 느림)
+  yaw   += e.movementX * SENSITIVITY;  // 오른쪽 이동 → yaw 증가
+  pitch += e.movementY * SENSITIVITY;  // 아래쪽 이동 → pitch 증가
+  // 상하 회전 한계 (±약 69도)
+  pitch = Math.max(-1.2, Math.min(1.2, pitch));
+});
+// ── 렌더 루프: yaw/pitch를 시각화 ────────────────────
+function render() {
+  requestAnimationFrame(render);
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const cx = canvas.width  / 2;
+  const cy = canvas.height / 2;
+  // yaw에 따라 수평선 회전
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(yaw);
+  ctx.strokeStyle = '#ff44ff';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(-120, 0); ctx.lineTo(120, 0); ctx.stroke();
+  ctx.restore();
+  // pitch에 따라 수직선 기울어짐
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(pitch);
+  ctx.strokeStyle = '#44ffff';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(0, -120); ctx.lineTo(0, 120); ctx.stroke();
+  ctx.restore();
+  // 조준점
+  ctx.fillStyle = 'white';
+  ctx.fillRect(cx-5, cy-1, 10, 2);
+  ctx.fillRect(cx-1, cy-5, 2, 10);
+  // 수치 출력
+  ctx.fillStyle = '#aaa';
+  ctx.font = '13px monospace';
+  ctx.fillText(`yaw   (좌우): ${(yaw   * 180/Math.PI).toFixed(1)}°`, 20, 30);
+  ctx.fillText(`pitch (상하): ${(pitch * 180/Math.PI).toFixed(1)}°`, 20, 50);
+  ctx.fillText(`잠금 상태: ${locked ? '✅ LOCKED' : '❌ FREE'}`,     20, 70);
+}
+render();
+</script>
+</body>
+</html>
+
+5. React + Three.js 1인칭 완전 예제
+이걸 바로 컴포넌트로 붙여넣으면 됩니다.
+
+// FirstPersonView.tsx
+// 패키지: npm install three @types/three
+import { useEffect, useRef } from "react";
+import * as THREE from "three";
+// 0 = 벽, 1 = 통로
+const MAZE = [
+  [0,0,0,0,0,0,0],
+  [0,1,1,1,0,1,0],
+  [0,1,0,1,1,1,0],
+  [0,1,0,0,0,1,0],
+  [0,1,1,1,0,1,0],
+  [0,0,0,0,0,0,0],
+];
+export function FirstPersonView() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const container = containerRef.current!;
+    const W = container.clientWidth;
+    const H = container.clientHeight;
+    // ════════════════════════════════════════
+    // Three.js 초기화
+    // ════════════════════════════════════════
+    const scene    = new THREE.Scene();
+    scene.fog      = new THREE.FogExp2(0x000010, 0.12);
+    scene.background = new THREE.Color(0x000010);
+    const camera   = new THREE.PerspectiveCamera(80, W / H, 0.05, 30);
+    camera.position.set(1.5, 0.5, 1.5);  // 통로 시작점
+    const renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    renderer.setSize(W, H);
+    container.appendChild(renderer.domElement);
+    // 조명
+    scene.add(new THREE.AmbientLight(0x332255, 0.5));
+    const playerLight = new THREE.PointLight(0xaa88ff, 2, 7);
+    camera.add(playerLight);  // 카메라에 붙이면 플레이어와 함께 이동
+    scene.add(camera);
+    // 바닥
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(MAZE[0].length, MAZE.length),
+      new THREE.MeshLambertMaterial({ color: 0x0a0a1a })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(MAZE[0].length / 2, 0, MAZE.length / 2);
+    scene.add(floor);
+    // 천장
+    const ceil = floor.clone();
+    ceil.rotation.x = Math.PI / 2;
+    ceil.position.set(MAZE[0].length / 2, 1, MAZE.length / 2);
+    scene.add(ceil);
+    // 벽 (인스턴싱으로 최적화)
+    const wallGeo = new THREE.BoxGeometry(1, 1, 1);
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0x6633cc });
+    const wallCount = MAZE.flat().filter(c => c === 0).length;
+    const walls = new THREE.InstancedMesh(wallGeo, wallMat, wallCount);
+    const dummy = new THREE.Object3D();
+    let wi = 0;
+    MAZE.forEach((row, r) => row.forEach((cell, c) => {
+      if (cell === 0) {
+        dummy.position.set(c + 0.5, 0.5, r + 0.5);
+        dummy.updateMatrix();
+        walls.setMatrixAt(wi++, dummy.matrix);
+      }
+    }));
+    walls.instanceMatrix.needsUpdate = true;
+    scene.add(walls);
+    // ════════════════════════════════════════
+    // Pointer Lock 설정
+    // ════════════════════════════════════════
+    let locked = false;
+    let yaw    = 0;   // 좌우 회전 누적값 (라디안)
+    let pitch  = 0;   // 상하 회전 누적값 (라디안)
+    // 클릭 → 잠금 요청
+    const onClick = () => container.requestPointerLock();
+    container.addEventListener('click', onClick);
+    // 잠금 상태 변화
+    const onLockChange = () => {
+      locked = document.pointerLockElement === container;
+    };
+    document.addEventListener('pointerlockchange', onLockChange);
+    // 마우스 이동 → yaw/pitch 누적
+    const onMouseMove = (e: MouseEvent) => {
+      if (!locked) return;
+      yaw   -= e.movementX * 0.002;   // 오른쪽 이동 = yaw 감소 (시계반대 = 오른쪽 봄)
+      pitch -= e.movementY * 0.002;   // 아래 이동 = pitch 감소 (아래 봄)
+      pitch  = Math.max(-1.2, Math.min(1.2, pitch));
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    // ════════════════════════════════════════
+    // 키보드 입력
+    // ════════════════════════════════════════
+    const keys: Record<string, boolean> = {};
+    const onKeyDown = (e: KeyboardEvent) => { keys[e.key.toLowerCase()] = true; };
+    const onKeyUp   = (e: KeyboardEvent) => { keys[e.key.toLowerCase()] = false; };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup',   onKeyUp);
+    // 충돌 감지
+    const isWall = (col: number, row: number) =>
+      row < 0 || row >= MAZE.length ||
+      col < 0 || col >= MAZE[0].length ||
+      MAZE[row][col] === 0;
+    // ════════════════════════════════════════
+    // 애니메이션 루프
+    // ════════════════════════════════════════
+    const clock = new THREE.Clock();
+    let raf: number;
+    const animate = () => {
+      raf = requestAnimationFrame(animate);
+      const dt = clock.getDelta();   // 이전 프레임과의 시간 간격(초)
+      // ① 카메라 회전 적용 — YXZ 순서 필수!
+      camera.quaternion.setFromEuler(
+        new THREE.Euler(pitch, yaw, 0, 'YXZ')
+        //               ↑상하  ↑좌우    ↑순서: Y먼저 → 짐벌락 방지
+      );
+      // ② 이동 방향 벡터 계산 (yaw 기반, y는 항상 0)
+      const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+      const right   = new THREE.Vector3( Math.cos(yaw), 0, -Math.sin(yaw));
+      const move    = new THREE.Vector3();
+      if (keys['w'] || keys['arrowup'])    move.addScaledVector(forward,  1);
+      if (keys['s'] || keys['arrowdown'])  move.addScaledVector(forward, -1);
+      if (keys['a'] || keys['arrowleft'])  move.addScaledVector(right,   -1);
+      if (keys['d'] || keys['arrowright']) move.addScaledVector(right,    1);
+      if (move.lengthSq() > 0) {
+        move.normalize().multiplyScalar(4 * dt);  // 속도: 4 units/초
+        // ③ X, Z 독립 충돌 처리 (슬라이딩 허용)
+        const R  = 0.3;  // 플레이어 반지름
+        const px = camera.position.x;
+        const pz = camera.position.z;
+        const nx = px + move.x;
+        if (!isWall(Math.floor(nx + R), Math.floor(pz)) &&
+            !isWall(Math.floor(nx - R), Math.floor(pz))) {
+          camera.position.x = nx;
+        }
+        const nz = pz + move.z;
+        if (!isWall(Math.floor(camera.position.x + R), Math.floor(nz)) &&
+            !isWall(Math.floor(camera.position.x - R), Math.floor(nz))) {
+          camera.position.z = nz;
+        }
+      }
+      renderer.render(scene, camera);
+    };
+    animate();
+    // ════════════════════════════════════════
+    // 리사이즈 대응
+    // ════════════════════════════════════════
+    const onResize = () => {
+      const rw = container.clientWidth;
+      const rh = container.clientHeight;
+      camera.aspect = rw / rh;
+      camera.updateProjectionMatrix();
+      renderer.setSize(rw, rh);
+    };
+    window.addEventListener('resize', onResize);
+    // ════════════════════════════════════════
+    // 정리 (컴포넌트 언마운트 시)
+    // ════════════════════════════════════════
+    return () => {
+      cancelAnimationFrame(raf);
+      document.exitPointerLock();
+      container.removeEventListener('click', onClick);
+      document.removeEventListener('pointerlockchange', onLockChange);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keyup',   onKeyUp);
+      window.removeEventListener('resize', onResize);
+      if (container.contains(renderer.domElement))
+        container.removeChild(renderer.domElement);
+      renderer.dispose();
+    };
+  }, []);
+  return (
+    <div ref={containerRef} style={{ width: '100vw', height: '100vh', cursor: 'none' }}>
+      {/* 조준선 */}
+      <div style={{
+        position: 'absolute', top: '50%', left: '50%',
+        transform: 'translate(-50%,-50%)', pointerEvents: 'none'
+      }}>
+        <div style={{ position:'absolute', top:'50%', left:0, right:0, height:1, background:'white' }} />
+        <div style={{ position:'absolute', left:'50%', top:0, bottom:0, width:1, background:'white' }} />
+      </div>
+      {/* 안내 문구 */}
+      <div style={{
+        position: 'absolute', bottom: 16, width: '100%',
+        textAlign: 'center', color: 'rgba(255,255,255,0.5)',
+        fontFamily: 'monospace', fontSize: 13, pointerEvents: 'none'
+      }}>
+        클릭하여 마우스 잠금 · WASD 이동 · ESC 해제
+      </div>
+    </div>
+  );
+}
+
+6. 에이전트를 위한 핵심 요점 정리
+패키지
+  three          → npm install three
+  @types/three   → npm install -D @types/three
+  Pointer Lock   → 패키지 없음 (Web API)
+필수 구문 순서
+  1. element.requestPointerLock()         — 클릭 핸들러 안에서만 호출
+  2. document.pointerLockElement === el   — 잠금 여부 확인
+  3. e.movementX / e.movementY            — mousemove 안에서 읽기
+  4. Euler(pitch, yaw, 0, "YXZ")          — Three.js 카메라 회전, YXZ 순서 필수
+흔한 실수
+  × requestPointerLock을 클릭 이벤트 밖에서 호출 → 브라우저가 차단
+  × Euler 순서를 "XYZ"로 쓰면 → 고개를 들었을 때 화면이 뱅글뱅글 돎
+  × X와 Z 충돌을 함께 처리 → 대각선 벽에 완전히 멈춤 (반드시 독립 처리)
+  × pitch 한계를 안 두면 → 카메라가 360도 뒤집힘
+Replit 주의사항
+  - Vite 프리뷰는 iframe 안에서 뜸
+  - iframe 안에서 requestPointerLock()은 보안 정책으로 차단될 수 있음
+  - 해결: iframe에 allow="pointer-lock" 속성 추가
+  <iframe allow="pointer-lock" src="..."></iframe>
+
+Next, I can add a minimap overlay in the corner of the 3D view that shows the player's real-time position and explored areas of the maze. Would you like me to do that?
