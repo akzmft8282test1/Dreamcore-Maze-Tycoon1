@@ -183,105 +183,118 @@ function buildDim1(complexity: number, equippedFlashlight: string | null): Dim1D
   flashlight.userData.baseIntensity = preset.intensity;
   scene.add(flashlight); scene.add(flashlight.target);
 
-  // ── 분홍 출구 문 (희박한 확률) ────────────────────────────────────────────
+  // ── 분홍 출구 문 ──────────────────────────────────────────────────────────
   let doorGroup: THREE.Group | null = null;
   let doorWorldPos: THREE.Vector3 | null = null;
   let doorNormal: THREE.Vector3 | null = null;
 
-  // 5% 확률로 문 생성
-  if (Math.random() < 0.05 || true) { // dev: 강제 생성 (출시 시 0.05로 변경)
-    // 내부 복도 중 한 곳에 문 배치
-    const candidates: { x: number; z: number; dir: 'h'|'v'; normal: THREE.Vector3 }[] = [];
-    for (let z = 2; z < mh-2; z++) for (let x = 2; x < mw-2; x++) {
-      const cell = maze[z][x];
-      if (!cell.walls.top)   candidates.push({ x, z, dir:'h', normal: new THREE.Vector3(0,0,-1) });
-      if (!cell.walls.right) candidates.push({ x, z, dir:'v', normal: new THREE.Vector3(1,0,0)  });
+  // 5% 확률로 문 생성 (dev: 강제 true)
+  if (Math.random() < 0.05 || true) {
+    // 실제 내부 벽(wall === true)에서 후보 선택
+    // 방향 'h' = cell의 top 벽(수평, Z 축 방향으로 면), 'v' = cell의 right 벽(수직, X 축 방향으로 면)
+    const candidates: { wallX: number; wallZ: number; dir: 'h'|'v' }[] = [];
+    for (let z = 1; z < mh - 1; z++) {
+      for (let x = 1; x < mw - 2; x++) {
+        if (maze[z][x].walls.top)   candidates.push({ wallX: x, wallZ: z, dir: 'h' });
+        if (maze[z][x].walls.right) candidates.push({ wallX: x, wallZ: z, dir: 'v' });
+      }
     }
+
     if (candidates.length > 0) {
       const pick = candidates[Math.floor(Math.random() * candidates.length)];
-      const wx = pick.x * CELL + CELL/2;
-      const wz = pick.z * CELL + CELL/2;
 
-      doorGroup = new THREE.Group();
+      // 벽 중앙 월드 좌표
+      // top 벽: x*CELL+CELL/2, z*CELL
+      // right 벽: (x+1)*CELL, z*CELL+CELL/2
+      const wx = pick.dir === 'h'
+        ? pick.wallX * CELL + CELL / 2
+        : (pick.wallX + 1) * CELL;
+      const wz = pick.dir === 'h'
+        ? pick.wallZ * CELL
+        : pick.wallZ * CELL + CELL / 2;
+
+      const DW   = 1.2;   // 문 너비
+      const DH   = 2.4;   // 문 높이
+      const DTH  = 0.10;  // 문짝 두께
+      const FRAME = 0.13; // 프레임 폭
+
+      const frameMat = new THREE.MeshLambertMaterial({ color: 0xff8fb0, emissive: 0x220010, emissiveIntensity: 0.2 });
+      const bodyMat  = new THREE.MeshLambertMaterial({ color: 0xff4d9e, emissive: 0x2a0018, emissiveIntensity: 0.18 });
+      const trimMat  = new THREE.MeshLambertMaterial({ color: 0xffbcd6 });
+      const goldMat  = new THREE.MeshLambertMaterial({ color: 0xffd700, emissive: 0x996600, emissiveIntensity: 0.4 });
+
+      doorGroup    = new THREE.Group();
       doorWorldPos = new THREE.Vector3(wx, 0, wz);
-      doorNormal = pick.normal;
+      doorNormal   = pick.dir === 'h'
+        ? new THREE.Vector3(0, 0, -1)
+        : new THREE.Vector3(1, 0, 0);
 
-      const DW = 1.25;
-      const DH = 2.35;
-      const DTH = 0.12;
-      const FRAME = 0.12;
-
-      const frameMat = new THREE.MeshLambertMaterial({ color: 0xff95ae });
-      const bodyMat = new THREE.MeshLambertMaterial({ color: 0xff5fa7, emissive: 0x300010, emissiveIntensity: 0.15 });
-      const trimMat = new THREE.MeshLambertMaterial({ color: 0xffb4c9 });
-      const goldMat = new THREE.MeshLambertMaterial({ color: 0xffd700, emissive: 0xaa8800, emissiveIntensity: 0.35 });
-
+      // wallAnchor: 벽 중앙을 원점으로, 로컬 +Z = 벽의 법선(플레이어 쪽)
       const wallAnchor = new THREE.Group();
       wallAnchor.position.set(wx, 0, wz);
       if (pick.dir === 'v') wallAnchor.rotation.y = Math.PI / 2;
       doorGroup.add(wallAnchor);
 
-      const embedDepth = -0.22;
-      const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(FRAME, DH + 0.14, 0.2), frameMat);
-      frameLeft.position.set(-DW / 2 - FRAME / 2, DH / 2, embedDepth);
-      wallAnchor.add(frameLeft);
-      const frameRight = new THREE.Mesh(new THREE.BoxGeometry(FRAME, DH + 0.14, 0.2), frameMat);
-      frameRight.position.set(DW / 2 + FRAME / 2, DH / 2, embedDepth);
-      wallAnchor.add(frameRight);
-      const frameTop = new THREE.Mesh(new THREE.BoxGeometry(DW + FRAME * 2, FRAME, 0.2), frameMat);
-      frameTop.position.set(0, DH + FRAME / 2, embedDepth);
-      wallAnchor.add(frameTop);
+      // 문 프레임 — 벽 앞면에 살짝 돌출
+      const ED = 0.0; // 벽 정중앙에서 법선 방향 오프셋 (0 = 정중앙 = 벽 속에 박힘)
+      const frameL = new THREE.Mesh(new THREE.BoxGeometry(FRAME, DH + FRAME, T_WALL + 0.04), frameMat);
+      frameL.position.set(-DW / 2 - FRAME / 2, DH / 2, ED);
+      wallAnchor.add(frameL);
+      const frameR = new THREE.Mesh(new THREE.BoxGeometry(FRAME, DH + FRAME, T_WALL + 0.04), frameMat);
+      frameR.position.set(DW / 2 + FRAME / 2, DH / 2, ED);
+      wallAnchor.add(frameR);
+      const frameT = new THREE.Mesh(new THREE.BoxGeometry(DW + FRAME * 2, FRAME, T_WALL + 0.04), frameMat);
+      frameT.position.set(0, DH + FRAME / 2, ED);
+      wallAnchor.add(frameT);
 
+      // 문짝 힌지 그룹 — 왼쪽 끝이 회전 축
       const doorHinge = new THREE.Group();
-      doorHinge.position.set(-DW / 2, 0, embedDepth + 0.02);
+      doorHinge.position.set(-DW / 2, 0, ED + DTH / 2 + 0.01);
       wallAnchor.add(doorHinge);
 
       const doorBody = new THREE.Mesh(new THREE.BoxGeometry(DW, DH, DTH), bodyMat);
       doorBody.position.set(DW / 2, DH / 2, 0);
       doorHinge.add(doorBody);
 
-      const panelA = new THREE.Mesh(new THREE.BoxGeometry(DW * 0.72, DH * 0.34, 0.03), trimMat);
-      panelA.position.set(DW / 2, DH * 0.73, 0.07);
-      doorBody.add(panelA);
-      const panelB = new THREE.Mesh(new THREE.BoxGeometry(DW * 0.72, DH * 0.26, 0.03), trimMat);
-      panelB.position.set(DW / 2, DH * 0.28, 0.07);
-      doorBody.add(panelB);
+      // 몰딩 장식 두 개
+      const molA = new THREE.Mesh(new THREE.BoxGeometry(DW * 0.7, DH * 0.35, 0.025), trimMat);
+      molA.position.set(0, DH * 0.25, DTH / 2 + 0.013);
+      doorBody.add(molA);
+      const molB = new THREE.Mesh(new THREE.BoxGeometry(DW * 0.7, DH * 0.28, 0.025), trimMat);
+      molB.position.set(0, -DH * 0.22, DTH / 2 + 0.013);
+      doorBody.add(molB);
 
-      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 10), goldMat);
-      knob.position.set(DW * 0.79, DH * 0.45, 0.1);
+      // 금색 손잡이
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 8), goldMat);
+      knob.position.set(DW * 0.38, -DH * 0.04, DTH / 2 + 0.07);
       doorBody.add(knob);
 
-      const keyShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.26, 8), goldMat);
+      // 열쇠구멍 장식
+      const keyShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.26, 8), goldMat);
       keyShaft.rotation.z = Math.PI / 2;
-      keyShaft.position.set(DW * 0.79, DH * 0.54, 0.1);
+      keyShaft.position.set(DW * 0.38, DH * 0.06, DTH / 2 + 0.07);
       doorBody.add(keyShaft);
-      const keyBow = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.017, 8, 16), goldMat);
-      keyBow.position.set(DW * 0.79 - 0.18, DH * 0.54, 0.1);
+      const keyBow = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.016, 8, 14), goldMat);
+      keyBow.position.set(DW * 0.38 - 0.17, DH * 0.06, DTH / 2 + 0.07);
       doorBody.add(keyBow);
-      const keyTooth1 = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.07, 0.015), goldMat);
-      keyTooth1.position.set(DW * 0.79 + 0.08, DH * 0.54 - 0.05, 0.1);
-      doorBody.add(keyTooth1);
-      const keyTooth2 = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.05, 0.015), goldMat);
-      keyTooth2.position.set(DW * 0.79 + 0.04, DH * 0.54 - 0.09, 0.1);
-      doorBody.add(keyTooth2);
+      const keyT1 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.065, 0.012), goldMat);
+      keyT1.position.set(DW * 0.38 + 0.07, DH * 0.06 - 0.05, DTH / 2 + 0.07);
+      doorBody.add(keyT1);
+      const keyT2 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.045, 0.012), goldMat);
+      keyT2.position.set(DW * 0.38 + 0.035, DH * 0.06 - 0.085, DTH / 2 + 0.07);
+      doorBody.add(keyT2);
 
-      const doorGlow = new THREE.PointLight(0xff69b4, 1.5, 7, 1.4);
-      doorGlow.position.set(DW * 0.2, DH * 0.55, 0.8);
-      doorBody.add(doorGlow);
+      // 분홍 분위기 조명
+      const doorGlow = new THREE.PointLight(0xff69b4, 2.0, 9, 1.3);
+      doorGlow.position.set(0, DH * 0.5, 1.2);
+      wallAnchor.add(doorGlow);
 
-      doorWorldPos = new THREE.Vector3(wx, 0, wz);
-      doorNormal = pick.normal;
-      doorGroup.position.set(0, 0, 0);
-
-      // 문 열릴 때 기준 피봇 저장 (애니메이션용)
-      (doorGroup as any)._panel = doorHinge;
-      (doorGroup as any)._open = false;
-      (doorGroup as any)._angle = 0;
-      (doorGroup as any)._unlocking = false;
+      // 피봇 저장 (애니메이션용)
+      (doorGroup as any)._panel    = doorHinge;
+      (doorGroup as any)._angle    = 0;
       (doorGroup as any)._keyAngle = 0;
-      (doorGroup as any)._key = keyShaft;
-      (doorGroup as any)._keyBow = keyBow;
-      (doorGroup as any)._keyTooth = keyTooth1;
+      (doorGroup as any)._key      = keyShaft;
+      (doorGroup as any)._keyBow   = keyBow;
 
       scene.add(doorGroup);
     }
@@ -610,12 +623,14 @@ export default function MazeEngine({
       // ── 차원1 전용 로직 ────────────────────────────────────────────────────
       if (curDim === 1 && d1.doorGroup && d1.doorWorldPos) {
         const dstate = doorStateRef.current;
-        const distToDoor = pos.x !== undefined
-          ? camera.position.distanceTo(d1.doorWorldPos)
-          : 999;
 
-        const nearDoor = distToDoor < 2.2;
-        setShowDoorHint(nearDoor && dstate === 'closed');
+        // XZ 평면 2D 거리 — Y 축 차이(카메라 높이)를 제외해야 정확함
+        const dx2d = pos.x - d1.doorWorldPos.x;
+        const dz2d = pos.z - d1.doorWorldPos.z;
+        const distToDoor2D = Math.sqrt(dx2d * dx2d + dz2d * dz2d);
+
+        const nearDoor = distToDoor2D < 2.5;
+        setShowDoorHint(nearDoor);
 
         // 손전등
         const fl = flashRef.current;
@@ -655,13 +670,11 @@ export default function MazeEngine({
           }
         }
 
-        // 문 통과 → 차원2 진입
-        if (dstate === 'open' && nearDoor) {
-          // 문 방향으로 플레이어가 걸어가면 진입
-          const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-          const toDoor = d1.doorWorldPos.clone().sub(camera.position).normalize();
-          if (fwd.dot(toDoor) > 0.5 && distToDoor < 1.2) {
-            // 차원2로 이동
+        // 문 통과 → 차원2 진입 (문이 열린 뒤 플레이어가 벽을 향해 걸어가면)
+        if (dstate === 'open' && distToDoor2D < 1.8) {
+          const fwd   = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+          const toDoor = new THREE.Vector3(d1.doorWorldPos.x - pos.x, 0, d1.doorWorldPos.z - pos.z).normalize();
+          if (fwd.dot(toDoor) > 0.35) {
             dimRef.current = 2;
             setDimension(2);
             setShowDoorHint(false);
@@ -671,9 +684,6 @@ export default function MazeEngine({
             wallBoxRef.current = d2.wallBoxes;
           }
         }
-
-        // 그림자 엔티티 (차원1 기존 그림자 존재 — 사람 같은 실루엣)
-        // 여기서는 차원2에서 꽃눈 엔티티를 사용하므로 차원1은 기존 유지
       }
 
       // ── 차원2 전용 로직 ────────────────────────────────────────────────────
