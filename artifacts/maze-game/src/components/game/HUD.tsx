@@ -6,23 +6,23 @@ import { useSocket } from "@/contexts/SocketContext";
 import { useGetGameState, getGetGameStateQueryKey } from "@workspace/api-client-react";
 
 const FLASHLIGHT_NAMES: Record<string, string> = {
-  flashlight_basic:     "기본 손전등",
-  flashlight_wide:      "광각 손전등",
-  flashlight_uv:        "UV 손전등",
+  flashlight_basic: "기본 손전등",
+  flashlight_wide: "광각 손전등",
+  flashlight_uv: "UV 손전등",
   flashlight_dreamcore: "드림코어 랜턴",
 };
 
 const FLASHLIGHT_COLORS: Record<string, string> = {
-  flashlight_basic:     "#fff9c4",
-  flashlight_wide:      "#fff3e0",
-  flashlight_uv:        "#ce93d8",
+  flashlight_basic: "#fff9c4",
+  flashlight_wide: "#fff3e0",
+  flashlight_uv: "#ce93d8",
   flashlight_dreamcore: "#ffe57f",
 };
 
 const FLASHLIGHT_ICONS: Record<string, string> = {
-  flashlight_basic:     "🔦",
-  flashlight_wide:      "💡",
-  flashlight_uv:        "🔮",
+  flashlight_basic: "🔦",
+  flashlight_wide: "💡",
+  flashlight_uv: "🔮",
   flashlight_dreamcore: "🕯️",
 };
 
@@ -74,12 +74,7 @@ export default function HUD({
 
   return (
     <>
-      {/* 좌측 상단: 서버 정보 */}
-      <motion.div
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        className="absolute top-4 left-4 glass rounded-xl px-4 py-3 z-10 min-w-40"
-      >
+      <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="absolute top-4 left-4 glass rounded-xl px-4 py-3 z-10 min-w-40">
         <p className="text-xs text-muted-foreground">서버</p>
         <p className="text-sm font-semibold text-foreground truncate max-w-32">{serverName}</p>
         <div className="flex items-center gap-2 mt-1">
@@ -88,35 +83,17 @@ export default function HUD({
         </div>
       </motion.div>
 
-      {/* 우측 상단: 방 번호 */}
-      <motion.div
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        className="absolute top-4 right-4 glass rounded-xl px-4 py-3 z-10 text-right"
-      >
+      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="absolute top-4 right-4 glass rounded-xl px-4 py-3 z-10 text-right">
         <p className="text-xs text-muted-foreground">구역</p>
         <p className="text-sm font-semibold text-primary">#{roomNumber.toString().padStart(4, "0")}</p>
         <p className="text-xs text-muted-foreground mt-1">탐색 진행 중</p>
       </motion.div>
 
-      {/* 뷰 전환 버튼 */}
-      <motion.button
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        onClick={onViewToggle}
-        data-testid="button-toggle-view"
-        className="absolute top-4 left-1/2 -translate-x-1/2 glass rounded-full px-4 py-1.5 z-10 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
+      <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={onViewToggle} data-testid="button-toggle-view" className="absolute top-4 left-1/2 -translate-x-1/2 glass rounded-full px-4 py-1.5 z-10 text-xs text-muted-foreground hover:text-foreground transition-colors">
         {is2DView ? "3D 뷰 (V)" : "2D 맵 (V)"}
       </motion.button>
 
-      {/* 좌측 하단: 재화 & 레벨 + 손전등 */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="absolute bottom-4 left-4 z-20 space-y-2"
-      >
-        {/* 재화 & 레벨 */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="absolute bottom-4 left-4 z-20 space-y-2">
         <div className="glass rounded-xl px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="text-yellow-400 text-sm">DC</span>
@@ -125,117 +102,55 @@ export default function HUD({
           <p className="text-xs text-muted-foreground mt-0.5">레벨 {gameState?.level ?? 1}</p>
         </div>
 
-        {/* 손전등 슬롯 */}
         <div className="relative">
-          <button
-            onClick={() => setShowPicker(p => !p)}
-            className="glass rounded-xl px-4 py-3 w-full text-left hover:bg-white/5 transition-colors"
-          >
+          <button onClick={() => setShowPicker(p => !p)} className="glass rounded-xl px-4 py-3 w-full text-left hover:bg-white/5 transition-colors">
             <div className="flex items-center gap-2.5">
-              <span
-                className="text-base"
-                style={{
-                  filter: flashlightOn && equippedFlashlight
-                    ? `drop-shadow(0 0 6px ${flashlightColor})`
-                    : "none",
-                  opacity: flashlightOn ? 1 : 0.4,
-                  transition: "all 0.2s",
-                }}
-              >
+              <span className="text-base" style={{ filter: flashlightOn && equippedFlashlight ? `drop-shadow(0 0 6px ${flashlightColor})` : "none", opacity: flashlightOn ? 1 : 0.4, transition: "all 0.2s" }}>
                 {flashlightIcon}
               </span>
               <div className="flex-1 min-w-0">
-                <p
-                  className="text-xs font-medium truncate"
-                  style={{ color: flashlightOn ? flashlightColor : "#4a4a6a" }}
-                >
+                <p className="text-xs font-medium truncate" style={{ color: flashlightOn ? flashlightColor : "#4a4a6a" }}>
                   {flashlightOn ? flashlightName : `${flashlightName} (꺼짐)`}
                 </p>
-                <p className="text-[10px] text-muted-foreground/50">
-                  F: 켜기/끄기 · 클릭: 교체
-                </p>
+                <p className="text-[10px] text-muted-foreground/50">F: 켜기/끄기 · 클릭: 교체</p>
               </div>
-              {/* 교체 화살표 */}
-              {ownedFlashlights.length > 0 && (
-                <span className="text-muted-foreground/40 text-xs">⇅</span>
-              )}
+              {ownedFlashlights.length > 0 && <span className="text-muted-foreground/40 text-xs">⇅</span>}
             </div>
           </button>
 
-          {/* 손전등 선택 패널 */}
           <AnimatePresence>
             {showPicker && (
-              <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                transition={{ duration: 0.15 }}
-                className="absolute bottom-full mb-2 left-0 glass-strong rounded-xl p-2 min-w-48 shadow-xl"
-              >
-                <p className="text-[10px] text-muted-foreground/60 px-2 pb-1.5 border-b border-white/5 mb-1.5">
-                  손전등 교체
-                </p>
-
-                {/* 기본(없음) 옵션 */}
-                <button
-                  onClick={() => { onEquipFlashlight?.(null); setShowPicker(false); }}
-                  className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left transition-colors hover:bg-white/8 ${!equippedFlashlight ? "bg-white/10" : ""}`}
-                >
+              <motion.div initial={{ opacity: 0, y: 8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.96 }} transition={{ duration: 0.15 }} className="absolute bottom-full mb-2 left-0 glass-strong rounded-xl p-2 min-w-48 shadow-xl">
+                <p className="text-[10px] text-muted-foreground/60 px-2 pb-1.5 border-b border-white/5 mb-1.5">손전등 교체</p>
+                <button onClick={() => { onEquipFlashlight?.(null); setShowPicker(false); }} className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left transition-colors hover:bg-white/8 ${!equippedFlashlight ? "bg-white/10" : ""}`}>
                   <span className="text-sm opacity-50">🔦</span>
                   <div>
                     <p className="text-xs text-muted-foreground">기본 손전등</p>
                     <p className="text-[10px] text-muted-foreground/40">기본 장비</p>
                   </div>
-                  {!equippedFlashlight && (
-                    <span className="ml-auto text-primary text-xs">✓</span>
-                  )}
+                  {!equippedFlashlight && <span className="ml-auto text-primary text-xs">✓</span>}
                 </button>
-
-                {/* 보유 손전등 목록 */}
                 {ownedFlashlights.map((item) => {
                   const isEquipped = equippedFlashlight === item.itemId;
                   const color = FLASHLIGHT_COLORS[item.itemId] ?? "#ffffff";
                   const name = FLASHLIGHT_NAMES[item.itemId] ?? item.itemId;
                   const icon = FLASHLIGHT_ICONS[item.itemId] ?? "🔦";
                   return (
-                    <button
-                      key={item.itemId}
-                      onClick={() => { onEquipFlashlight?.(item.itemId); setShowPicker(false); }}
-                      className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left transition-colors hover:bg-white/8 ${isEquipped ? "bg-white/10" : ""}`}
-                    >
-                      <span
-                        className="text-sm"
-                        style={{ filter: `drop-shadow(0 0 4px ${color})` }}
-                      >
-                        {icon}
-                      </span>
-                      <div className="flex-1">
-                        <p className="text-xs font-medium" style={{ color }}>{name}</p>
-                      </div>
-                      {isEquipped && (
-                        <span className="text-primary text-xs">✓</span>
-                      )}
+                    <button key={item.itemId} onClick={() => { onEquipFlashlight?.(item.itemId); setShowPicker(false); }} className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left transition-colors hover:bg-white/8 ${isEquipped ? "bg-white/10" : ""}`}>
+                      <span className="text-sm" style={{ filter: `drop-shadow(0 0 4px ${color})` }}>{icon}</span>
+                      <div className="flex-1"><p className="text-xs font-medium" style={{ color }}>{name}</p></div>
+                      {isEquipped && <span className="text-primary text-xs">✓</span>}
                     </button>
                   );
                 })}
-
-                {ownedFlashlights.length === 0 && (
-                  <p className="text-[10px] text-muted-foreground/40 px-2 py-1">
-                    상점에서 손전등을 구매하세요
-                  </p>
-                )}
+                {ownedFlashlights.length === 0 && <p className="text-[10px] text-muted-foreground/40 px-2 py-1">상점에서 손전등을 구매하세요</p>}
               </motion.div>
             )}
           </AnimatePresence>
         </div>
       </motion.div>
 
-      {/* 우측 하단: 조작 도움말 */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 0.5 }}
-        className="absolute bottom-4 right-4 text-right z-10 text-xs text-muted-foreground/50 space-y-0.5"
-      >
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.5 }} className="absolute bottom-4 right-4 text-right z-10 text-xs text-muted-foreground/50 space-y-0.5">
         <p>WASD / 방향키 — 이동</p>
         <p>마우스 드래그 — 시점 회전</p>
         <p>V — 뷰 전환</p>

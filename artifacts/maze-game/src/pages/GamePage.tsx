@@ -2,7 +2,7 @@
 import { useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import MazeEngine from "@/components/game/MazeEngine";
+import MazeEngine, { FLASHLIGHT_PRESETS } from "@/components/game/MazeEngine";
 import ChatSystem from "@/components/game/ChatSystem";
 import HUD from "@/components/game/HUD";
 import Minimap from "@/components/game/Minimap";
@@ -34,15 +34,10 @@ export default function GamePage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // 인벤토리에서 손전등 목록 가져오기
   const { data: inventory = [] } = useGetUserInventory(user?.id ?? 0, {
     query: { queryKey: getGetUserInventoryQueryKey(user?.id ?? 0), enabled: !!user }
   });
-  const ownedFlashlights = (inventory as any[]).filter(
-    (item: any) => item.itemType === "flashlight"
-  );
-
-  // 현재 장착된 손전등 (서버 상태)
+  const ownedFlashlights = (inventory as any[]).filter((item: any) => item.itemType === "flashlight");
   const equippedFlashlight = (user as any)?.equippedFlashlight ?? null;
 
   const handlePositionChange = useCallback((pos: { x: number; y: number; z: number; mapId: string }) => {
@@ -54,11 +49,9 @@ export default function GamePage() {
 
   const handleViewToggle = useCallback(() => setIs2DView(v => !v), []);
 
-  // 손전등 교체 핸들러
   const handleEquipFlashlight = useCallback(async (itemId: string | null) => {
     try {
       await equipSkin.mutateAsync({ data: { itemId: itemId ?? "flashlight_none" } });
-      // user 정보 갱신
       queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
       const name = itemId
         ? ({ flashlight_basic: "기본 손전등", flashlight_wide: "광각 손전등", flashlight_uv: "UV 손전등", flashlight_dreamcore: "드림코어 랜턴" }[itemId] ?? itemId)
