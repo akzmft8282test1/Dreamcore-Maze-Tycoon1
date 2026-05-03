@@ -255,16 +255,18 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
       const cosY = Math.cos(pl.yaw);
 
       // Movement
-      let mx=0, mz=0;
-      if (keys["w"]||keys["arrowup"])    { mx -= sinY; mz -= cosY; }
-      if (keys["s"]||keys["arrowdown"])  { mx += sinY; mz += cosY; }
-      if (keys["a"]||keys["arrowleft"])  { mx -= cosY; mz += sinY; }
-      if (keys["d"]||keys["arrowright"]) { mx += cosY; mz -= sinY; }
-      const len = Math.sqrt(mx*mx+mz*mz);
-      if (len>0) { mx=(mx/len)*SPEED; mz=(mz/len)*SPEED; }
+      const forward = new THREE.Vector3(-Math.sin(pl.yaw), 0, -Math.cos(pl.yaw));
+      const right = new THREE.Vector3(Math.cos(pl.yaw), 0, -Math.sin(pl.yaw));
+      const move = new THREE.Vector3();
+      if (keys["w"]||keys["arrowup"]) move.addScaledVector(forward, 1);
+      if (keys["s"]||keys["arrowdown"]) move.addScaledVector(forward, -1);
+      if (keys["a"]||keys["arrowleft"]) move.addScaledVector(right, -1);
+      if (keys["d"]||keys["arrowright"]) move.addScaledVector(right, 1);
+      const len = move.length();
+      if (len > 0) move.normalize().multiplyScalar(SPEED);
       const wb = wallBoxRef.current;
-      if (mx!==0||mz!==0) {
-        const nx=pl.x+mx, nz=pl.z+mz;
+      if (move.x!==0||move.z!==0) {
+        const nx=pl.x+move.x, nz=pl.z+move.z;
         if (!hits(wb,nx,nz))         { pl.x=nx; pl.z=nz; }
         else if (!hits(wb,nx,pl.z))  { pl.x=nx; }
         else if (!hits(wb,pl.x,nz))  { pl.z=nz; }

@@ -1,0 +1,179 @@
+포인터락 기반 1인칭 3D 뷰의 핵심 구조를 설명해드릴게요.
+
+작동 원리 — 3단계
+1. Pointer Lock API
+마우스 커서를 특정 DOM 요소에 잠금시킵니다. 잠금 후에는 마우스가 화면 밖으로 나가지 않고, mousemove 이벤트에서 절대 위치 대신 움직인 양(movementX, movementY) 만 받습니다.
+
+// 클릭하면 해당 div에 마우스를 잠금
+divElement.addEventListener("click", () => {
+  divElement.requestPointerLock();
+});
+// 잠금 후 mousemove에서 델타값만 온다
+document.addEventListener("mousemove", (e) => {
+  if (document.pointerLockElement !== divElement) return;
+  console.log(e.movementX, e.movementY); // 이번 프레임에서 몇 픽셀 움직였는지
+});
+
+2. Yaw/Pitch 누적 → 카메라 회전
+movementX는 좌우(Yaw), movementY는 상하(Pitch)에 누적합니다.
+
+let yaw = 0;   // Y축 회전 (좌우)
+let pitch = 0; // X축 회전 (상하)
+document.addEventListener("mousemove", (e) => {
+  if (document.pointerLockElement !== divElement) return;
+  yaw   -= e.movementX * 0.002; // 감도 조절
+  pitch -= e.movementY * 0.002;
+  pitch = Math.max(-1.2, Math.min(1.2, pitch)); // 고개 꺾임 한계
+});
+// 매 프레임 카메라에 적용 — YXZ 순서가 1인칭에서 자연스러움
+camera.quaternion.setFromEuler(
+  new THREE.Euler(pitch, yaw, 0, "YXZ")
+);
+
+YXZ 순서가 핵심입니다. Y를 먼저 돌리면 "몸통이 먼저 돌고, 고개를 드는" 자연스러운 1인칭 동작이 나옵니다.
+
+3. WASD 이동 + 충돌 감지
+Yaw 각도에서 forward/right 벡터를 매 프레임 계산하고, X·Z 축을 따로 검사해 벽에 끼이지 않게 합니다.
+
+// yaw 각도 → 방향 벡터
+const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+const right   = new THREE.Vector3( Math.cos(yaw), 0, -Math.sin(yaw));
+const move = new THREE.Vector3();
+if (keys["w"]) move.addScaledVector(forward,  1);
+if (keys["s"]) move.addScaledVector(forward, -1);
+if (keys["a"]) move.addScaledVector(right,   -1);
+if (keys["d"]) move.addScaledVector(right,    1);
+move.normalize().multiplyScalar(3.5 * dt); // 속도 * 델타타임
+// 충돌: X와 Z를 독립적으로 처리
+const r = 0.3; // 플레이어 반지름
+const nx = camera.position.x + move.x;
+if (!isWall(Math.floor(nx + r), Math.floor(camera.position.z)) &&
+    !isWall(Math.floor(nx - r), Math.floor(camera.position.z))) {
+  camera.position.x = nx;
+}
+const nz = camera.position.z + move.z;
+if (!isWall(Math.floor(camera.position.x + r), Math.floor(nz)) &&
+    !isWall(Math.floor(camera.position.x - r), Math.floor(nz))) {
+  camera.position.z = nz;
+}
+
+X·Z를 따로 처리하면 벽에 대각선으로 부딪힐 때 미끄러지듯 슬라이딩이 됩니다.
+
+완전한 최소 예제 (150줄)
+import { useEffect, useRef } from "react";
+import * as THREE from "three";
+const MAZE = [
+  [0,0,0,0,0],
+  [0,1,1,1,0],
+  [0,1,0,1,0],
+  [0,1,1,1,0],
+  [0,0,0,0,0],
+]; // 0=벽, 1=통로
+export function FirstPersonMaze() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const container = ref.current!;
+    const W = container.clientWidth, H = container.clientHeight;
+    // ── 씬 ──────────────────────────────────────
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000010, 0.1);
+    const camera = new THREE.PerspectiveCamera(80, W / H, 0.05, 30);
+    camera.position.set(1.5, 0.5, 1.5); // 통로 안에서 시작
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(W, H);
+    container.appendChild(renderer.domElement);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+    const light = new THREE.PointLight(0xaa88ff, 2, 6);
+    camera.add(light);
+    scene.add(camera);
+    // ── 바닥 / 천장 ──────────────────────────────
+    const floorGeo = new THREE.PlaneGeometry(5, 5);
+    const floor = new THREE.Mesh(floorGeo, new THREE.MeshLambertMaterial({ color: 0x111122 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(2.5, 0, 2.5);
+    scene.add(floor);
+    const ceiling = floor.clone();
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.set(2.5, 1, 2.5);
+    scene.add(ceiling);
+    // ── 벽 생성 ───────────────────────────────────
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0x6633cc });
+    const wallGeo = new THREE.BoxGeometry(1, 1, 1);
+    MAZE.forEach((row, rIdx) =>
+      row.forEach((cell, cIdx) => {
+        if (cell === 0) {
+          const m = new THREE.Mesh(wallGeo, wallMat);
+          m.position.set(cIdx + 0.5, 0.5, rIdx + 0.5);
+          scene.add(m);
+        }
+      })
+    );
+    // ── 포인터락 + 입력 ───────────────────────────
+    let yaw = 0, pitch = 0;
+    const keys: Record<string, boolean> = {};
+    container.addEventListener("click", () => container.requestPointerLock());
+    document.addEventListener("mousemove", (e) => {
+      if (document.pointerLockElement !== container) return;
+      yaw   -= e.movementX * 0.002;
+      pitch -= e.movementY * 0.002;
+      pitch = Math.max(-1.1, Math.min(1.1, pitch));
+    });
+    document.addEventListener("keydown", (e) => { keys[e.key.toLowerCase()] = true; });
+    document.addEventListener("keyup",   (e) => { keys[e.key.toLowerCase()] = false; });
+    const isWall = (c: number, r: number) =>
+      r < 0 || r >= MAZE.length || c < 0 || c >= MAZE[0].length || MAZE[r][c] === 0;
+    // ── 애니메이션 루프 ───────────────────────────
+    const clock = new THREE.Clock();
+    let raf: number;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const dt = clock.getDelta();
+      // 회전 적용 (YXZ = 1인칭)
+      camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, "YXZ"));
+      // 이동
+      const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+      const rgt = new THREE.Vector3( Math.cos(yaw), 0, -Math.sin(yaw));
+      const mv  = new THREE.Vector3();
+      if (keys["w"]) mv.addScaledVector(fwd,  1);
+      if (keys["s"]) mv.addScaledVector(fwd, -1);
+      if (keys["a"]) mv.addScaledVector(rgt, -1);
+      if (keys["d"]) mv.addScaledVector(rgt,  1);
+      if (mv.lengthSq() > 0) mv.normalize().multiplyScalar(3 * dt);
+      const R = 0.3;
+      const nx = camera.position.x + mv.x;
+      if (!isWall(Math.floor(nx+R), Math.floor(camera.position.z)) &&
+          !isWall(Math.floor(nx-R), Math.floor(camera.position.z)))
+        camera.position.x = nx;
+      const nz = camera.position.z + mv.z;
+      if (!isWall(Math.floor(camera.position.x+R), Math.floor(nz)) &&
+          !isWall(Math.floor(camera.position.x-R), Math.floor(nz)))
+        camera.position.z = nz;
+      renderer.render(scene, camera);
+    };
+    tick();
+    return () => {
+      cancelAnimationFrame(raf);
+      container.removeChild(renderer.domElement);
+      renderer.dispose();
+    };
+  }, []);
+  return (
+    <div ref={ref} style={{ width: "100vw", height: "100vh", cursor: "none" }}>
+      {/* 조준선 */}
+      <div style={{ position:"absolute", top:"50%", left:"50%",
+        width:16, height:16, transform:"translate(-50%,-50%)",
+        pointerEvents:"none" }}>
+        <div style={{ position:"absolute", top:"50%", left:0, right:0, height:1, background:"white" }}/>
+        <div style={{ position:"absolute", left:"50%", top:0, bottom:0, width:1, background:"white" }}/>
+      </div>
+    </div>
+  );
+}
+
+요약표
+개념	역할
+requestPointerLock()	마우스를 DOM 요소에 잠금, 커서 숨김
+e.movementX/Y	잠금 후 절대좌표 대신 델타값만 제공
+yaw / pitch 누적	마우스 이동을 카메라 각도로 변환
+Euler("YXZ")	Y회전 우선 → 자연스러운 1인칭 시점
+X·Z 독립 충돌	벽에 붙었을 때 한 축은 슬라이딩 허용
