@@ -231,13 +231,13 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
       });
       const keys = keysRef.current;
       const player = playerRef.current;
-      const cosY = Math.cos(player.yaw);
       const sinY = Math.sin(player.yaw);
+      const cosY = Math.cos(player.yaw);
       let moveX = 0, moveZ = 0;
-      if (keys["w"] || keys["arrowup"]) { moveX += cosY; moveZ += sinY; }
-      if (keys["s"] || keys["arrowdown"]) { moveX -= cosY; moveZ -= sinY; }
-      if (keys["a"] || keys["arrowleft"]) { moveX += sinY; moveZ -= cosY; }
-      if (keys["d"] || keys["arrowright"]) { moveX -= sinY; moveZ += cosY; }
+      if (keys["w"] || keys["arrowup"]) { moveX -= sinY; moveZ -= cosY; }
+      if (keys["s"] || keys["arrowdown"]) { moveX += sinY; moveZ += cosY; }
+      if (keys["a"] || keys["arrowleft"]) { moveX -= cosY; moveZ += sinY; }
+      if (keys["d"] || keys["arrowright"]) { moveX += cosY; moveZ -= sinY; }
       const moveLen = Math.sqrt(moveX * moveX + moveZ * moveZ);
       if (moveLen > 0) { moveX = (moveX / moveLen) * MOVE_SPEED; moveZ = (moveZ / moveLen) * MOVE_SPEED; }
       const walls = wallBoxesRef.current;
