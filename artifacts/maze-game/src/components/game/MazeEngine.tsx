@@ -155,112 +155,49 @@ function makeCloudSkyTex(): THREE.DataTexture {
   return tex;
 }
 
-// ─── 꽃-눈 엔티티 3D 모델 빌드 ───────────────────────────────────────────────
-function buildFlowerEntity(): { group: THREE.Group; eyeMesh: THREE.Mesh; legL: THREE.Mesh; legR: THREE.Mesh; flowerHead: THREE.Group } {
-  const darkMat   = new THREE.MeshLambertMaterial({ color: 0x1a1a28 });
-  const darkPMat  = new THREE.MeshLambertMaterial({ color: 0x252538 });
-  const skinMat   = new THREE.MeshLambertMaterial({ color: 0xf0d0b8 });
-  const petalMatA = new THREE.MeshLambertMaterial({ color: 0xff79b8, emissive: 0x220010, emissiveIntensity: 0.12 });
-  const petalMatB = new THREE.MeshLambertMaterial({ color: 0xdd5090, emissive: 0x1a000c, emissiveIntensity: 0.08 });
-  const sepalMat  = new THREE.MeshLambertMaterial({ color: 0x3a9a44 });
-  const irisMatG  = new THREE.MeshLambertMaterial({ color: 0x22cc55, emissive: 0x006622, emissiveIntensity: 0.5 });
-  const pupilMat  = new THREE.MeshLambertMaterial({ color: 0x050510 });
-  const whiteMat  = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  const yellowMat = new THREE.MeshLambertMaterial({ color: 0xffd700 });
-  const sockMat   = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
-  const shoeMat   = new THREE.MeshLambertMaterial({ color: 0x222222 });
+function makeEntitySpriteTexture(): THREE.Texture {
+  const tex = new THREE.TextureLoader().load("/entity-flower.png");
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
 
-  const group = new THREE.Group();
+function makeWallSkyTex(): THREE.DataTexture {
+  return makeDataTex((x, y, s) => {
+    const ty = y / s;
+    const rx = x / s;
+    const sky = 0.62 + Math.sin(rx * 12 + ty * 3) * 0.05;
+    const cloud = Math.max(0, 1 - Math.abs(rx - 0.45) * 4.2) * Math.max(0, 1 - Math.abs(ty - 0.35) * 5.5);
+    const cloud2 = Math.max(0, 1 - Math.abs(rx - 0.7) * 5.1) * Math.max(0, 1 - Math.abs(ty - 0.62) * 4.8);
+    const mix = Math.min(1, cloud + cloud2 * 0.8);
+    return [
+      Math.round(110 + sky * 50 + mix * 90),
+      Math.round(170 + sky * 35 + mix * 55),
+      Math.round(255),
+    ];
+  });
+}
 
-  // ── 몸통(재킷) ────────────────────────────────────────
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.78, 0.28), darkMat);
-  torso.position.set(0, 0.95, 0); group.add(torso);
+function makeCeilingTex(): THREE.DataTexture {
+  return makeDataTex((x, y, s) => {
+    const nx = x / s;
+    const ny = y / s;
+    const seam = Math.max(0, 1 - Math.abs(ny - 0.5) * 8);
+    const panel = ((Math.floor(nx * 8) + Math.floor(ny * 4)) % 2 === 0) ? 1 : 0;
+    const base = panel ? 18 : 12;
+    const glow = seam * 12;
+    return [base + glow, base + glow, base + glow + 4];
+  });
+}
 
-  // 깃/넥타이 (흰색)
-  const collar = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.29), whiteMat);
-  collar.position.set(0, 1.28, 0); group.add(collar);
-
-  // 주머니/배지 (노란 직사각형)
-  const badge = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.2, 0.06), yellowMat);
-  badge.position.set(0, 0.88, 0.17); group.add(badge);
-
-  // 치마 (플리츠 — 원기둥으로 근사)
-  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.35, 0.48, 10), darkPMat);
-  skirt.position.set(0, 0.49, 0); group.add(skirt);
-
-  // ── 팔 (X자로 교차) ────────────────────────────────────
-  const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.065, 0.44, 6), darkMat);
-  armL.rotation.z = -Math.PI * 0.3;
-  armL.position.set(-0.3, 0.94, 0.1); group.add(armL);
-  const armR = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.065, 0.44, 6), darkMat);
-  armR.rotation.z = Math.PI * 0.3;
-  armR.position.set(0.3, 0.94, 0.1); group.add(armR);
-
-  // ── 다리 ─────────────────────────────────────────────
-  const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.065, 0.58, 6), skinMat);
-  legL.position.set(-0.12, 0.13, 0); group.add(legL);
-  const legR = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.065, 0.58, 6), skinMat);
-  legR.position.set(0.12, 0.13, 0); group.add(legR);
-
-  // ── 양말 + 신발 ──────────────────────────────────────
-  for (const sx of [-0.12, 0.12]) {
-    const sock = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.072, 0.18, 6), sockMat);
-    sock.position.set(sx, -0.16, 0); group.add(sock);
-    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.22), shoeMat);
-    shoe.position.set(sx, -0.29, 0.03); group.add(shoe);
-  }
-
-  // ── 꽃 머리 ─────────────────────────────────────────
-  const flowerHead = new THREE.Group();
-  flowerHead.position.set(0, 1.72, 0);
-  group.add(flowerHead);
-
-  // 꽃받침 (녹색 원판)
-  const sepal = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.05, 16), sepalMat);
-  sepal.rotation.x = Math.PI / 2;
-  sepal.position.set(0, 0, -0.02);
-  flowerHead.add(sepal);
-
-  // 꽃잎 (16장)
-  const NPETALS = 16;
-  for (let i = 0; i < NPETALS; i++) {
-    const ang = (i / NPETALS) * Math.PI * 2;
-    const pg = new THREE.Group();
-    pg.rotation.z = ang;
-    flowerHead.add(pg);
-    const isLong = i % 2 === 0;
-    const pl = isLong ? 0.46 : 0.38;
-    const pw = isLong ? 0.12 : 0.09;
-    const petal = new THREE.Mesh(new THREE.BoxGeometry(pw, pl, 0.055), i % 3 < 2 ? petalMatA : petalMatB);
-    petal.position.set(0, 0.22 + pl / 2, 0);
-    pg.add(petal);
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(pw * 0.5, 6, 4), i % 3 < 2 ? petalMatA : petalMatB);
-    tip.scale.y = 0.6;
-    tip.position.set(0, 0.22 + pl, 0);
-    pg.add(tip);
-  }
-
-  // 눈 흰자 (흰 원)
-  const eyeWhite = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 10), whiteMat);
-  eyeWhite.position.set(0, 0, 0.08);
-  flowerHead.add(eyeWhite);
-
-  // 홍채 (초록)
-  const eyeMesh = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), irisMatG);
-  eyeMesh.position.set(0, 0, 0.25);
-  flowerHead.add(eyeMesh);
-
-  // 동공 (검정)
-  const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), pupilMat);
-  pupil.position.set(0, 0, 0.39);
-  flowerHead.add(pupil);
-
-  // 눈빛 하이라이트
-  const hl = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), whiteMat);
-  hl.position.set(0.06, 0.07, 0.46);
-  flowerHead.add(hl);
-
-  return { group, eyeMesh, legL, legR, flowerHead };
+function makeWallFrameTex(): THREE.DataTexture {
+  return makeDataTex((x, y, s) => {
+    const nx = x / s;
+    const ny = y / s;
+    const seam = Math.max(0, 1 - Math.abs(nx - 0.5) * 6);
+    const tint = 30 + Math.round(seam * 8 + (1 - ny) * 4);
+    return [tint, tint + 1, tint + 6];
+  });
 }
 
 // ─── 차원1 씬 빌드 ──────────────────────────────────────────────────────────
@@ -453,13 +390,10 @@ interface BeachBallData {
 
 interface EntityDim2Data {
   group: THREE.Group;
-  eyeMesh: THREE.Mesh;
+  sprite: THREE.Sprite;
   pos: THREE.Vector3;
   vel: THREE.Vector3;
   phase: number;
-  legL: THREE.Mesh;
-  legR: THREE.Mesh;
-  flowerHead: THREE.Group;
 }
 
 interface Dim2Data {
@@ -472,14 +406,11 @@ interface Dim2Data {
 // ─── 차원2 씬 빌드 (백룸식 미로 — 드림코어 차원) ─────────────────────────────
 function buildDim2(): Dim2Data {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x87ceeb);
-  scene.fog = new THREE.FogExp2(0xb8e4ff, 0.016);
+  scene.background = new THREE.Color(0x2d3645);
+  scene.fog = new THREE.FogExp2(0x1f2631, 0.08);
 
   // 조명
-  scene.add(new THREE.AmbientLight(0xfff8f0, 2.4));
-  const sun = new THREE.DirectionalLight(0xfffde7, 1.6);
-  sun.position.set(30, 60, 20);
-  scene.add(sun);
+  scene.add(new THREE.AmbientLight(0x3a3f49, 0.14));
 
   // 미로 생성 (DIM2_MW×DIM2_MH)
   const maze = generateMaze(DIM2_MW, DIM2_MH);
@@ -520,13 +451,12 @@ function buildDim2(): Dim2Data {
   }
 
   // ── 벽 재료 ─────────────────────────────────────────────────────────────
-  const skyTex = makeCloudSkyTex();
-  const skyMat  = new THREE.MeshLambertMaterial({ map: skyTex, side: THREE.FrontSide });
-  const glassMat = new THREE.MeshBasicMaterial({
-    color: 0xddf0ff, transparent: true, opacity: 0.09,
-    side: THREE.FrontSide, depthWrite: false,
-  });
-  const outLineMat = new THREE.LineBasicMaterial({ color: 0xff99cc });
+  const skyTex = makeWallSkyTex();
+  const ceilTex = makeCeilingTex();
+  const frameTex = makeWallFrameTex();
+  const skyMat  = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide });
+  const glassMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, transparent: true, opacity: 0.98 });
+  const outLineMat = new THREE.LineBasicMaterial({ color: 0xff99cc, transparent: true, opacity: 0.22 });
 
   const wallBoxes: WallBox[] = [];
 
@@ -557,6 +487,14 @@ function buildDim2(): Dim2Data {
     skyPlane.position.set(cx, height / 2, cz);
     scene.add(skyPlane);
   }
+
+  const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(mazeW + 1, mazeH + 1),
+    new THREE.MeshLambertMaterial({ map: ceilTex, color: 0x20242b })
+  );
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.set(mazeW / 2, H_WALL, mazeH / 2);
+  scene.add(ceiling);
 
   // ── 미로 벽 배치 ─────────────────────────────────────────────────────────
   for (let r = 0; r < DIM2_MH; r++) {
@@ -626,21 +564,25 @@ function buildDim2(): Dim2Data {
   // ── 꽃-눈 엔티티 ─────────────────────────────────────────────────────────
   const entityCells: [number, number][] = [[1,4],[3,1],[5,6],[7,3],[2,7]];
   const entityGroups: EntityDim2Data[] = [];
+  const entityTex = makeEntitySpriteTexture();
 
   for (const [er, ec] of entityCells) {
     if (er >= DIM2_MH || ec >= DIM2_MW) continue;
     const ex = ec * CELL + CELL / 2;
     const ez = er * CELL + CELL / 2;
-    const { group, eyeMesh, legL, legR, flowerHead } = buildFlowerEntity();
+    const group = new THREE.Group();
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: entityTex, transparent: true, depthWrite: false }));
+    sprite.scale.set(2.3, 3.0, 1);
+    sprite.position.set(0, 1.2, 0);
+    group.add(sprite);
     group.position.set(ex, 0, ez);
     group.rotation.y = Math.random() * Math.PI * 2;
     scene.add(group);
     entityGroups.push({
-      group, eyeMesh,
+      group, sprite,
       pos: new THREE.Vector3(ex, 0, ez),
       vel: new THREE.Vector3(),
       phase: Math.random() * Math.PI * 2,
-      legL, legR, flowerHead,
     });
   }
 
@@ -979,7 +921,6 @@ export default function MazeEngine({
           }
 
           // ── 꽃-눈 엔티티 이동 + 애니메이션 ─────────────────────────────
-          const eyeMeshes: THREE.Mesh[] = [];
           for (const ent of d2.entityGroups) {
             ent.phase += dt;
 
@@ -1009,24 +950,16 @@ export default function MazeEngine({
             }
 
             ent.group.position.set(ent.pos.x, Math.sin(ent.phase * 1.1) * 0.03, ent.pos.z);
-
-            // 걷기 애니메이션
-            const walkSpd = ent.phase * 3.5;
-            ent.legL.rotation.x = Math.sin(walkSpd) * 0.38;
-            ent.legR.rotation.x = -Math.sin(walkSpd) * 0.38;
-            // 꽃 머리 흔들기
-            ent.flowerHead.rotation.z = Math.sin(ent.phase * 0.7) * 0.07;
-            ent.flowerHead.rotation.y += dt * 0.15;
-
-            eyeMeshes.push(ent.eyeMesh);
+            ent.sprite.material.rotation = Math.sin(ent.phase * 0.4) * 0.08;
+            ent.sprite.material.opacity = 0.88 + Math.sin(ent.phase * 2.4) * 0.08;
           }
 
           // ── 눈 응시 감지 (raycaster) ──────────────────────────────────
           raycaster.setFromCamera(centerNDC, camera);
-          const eyeHits = raycaster.intersectObjects(eyeMeshes, false);
+          const eyeHits = raycaster.intersectObjects(d2.entityGroups.map((ent) => ent.sprite), false);
 
           if (eyeHits.length > 0) {
-            const hitIdx = eyeMeshes.indexOf(eyeHits[0].object as THREE.Mesh);
+            const hitIdx = d2.entityGroups.findIndex((ent) => ent.sprite === eyeHits[0].object);
             if (hitIdx !== -1) {
               if (gazeRef.current.spriteIdx === hitIdx) {
                 gazeRef.current.time += dt;
