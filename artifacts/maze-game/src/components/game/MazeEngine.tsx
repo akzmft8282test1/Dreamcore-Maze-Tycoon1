@@ -333,6 +333,7 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
       const isLocked = document.pointerLockElement === canvasRef.current;
       lockedRef.current = isLocked;
       setLocked(isLocked);
+      if (canvasRef.current) canvasRef.current.style.cursor = isLocked ? "none" : "default";
     };
     const onMouseDown = (e: MouseEvent) => {
       const canvas = canvasRef.current;
@@ -340,20 +341,16 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
       lookStateRef.current.dragging = true;
       lookStateRef.current.lastX = e.clientX;
       lookStateRef.current.lastY = e.clientY;
-      if (document.pointerLockElement !== canvas) canvas.requestPointerLock();
+      canvas.requestPointerLock?.();
       canvas.style.cursor = "none";
     };
     const onMouseUp = () => {
       lookStateRef.current.dragging = false;
-      if (document.pointerLockElement !== canvasRef.current) {
-        const canvas = canvasRef.current;
-        if (canvas) canvas.style.cursor = "default";
-      }
+      if (canvasRef.current && document.pointerLockElement !== canvasRef.current) canvasRef.current.style.cursor = "default";
     };
     const onBlur = () => {
       lookStateRef.current.dragging = false;
-      const canvas = canvasRef.current;
-      if (canvas) canvas.style.cursor = "default";
+      if (canvasRef.current) canvasRef.current.style.cursor = "default";
     };
     document.addEventListener("pointerlockchange", onPointerLockChange);
     window.addEventListener("keydown", onKeyDown);
@@ -380,13 +377,13 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
     };
   }, [initScene, onFlashlightChange]);
 
-  return (
+    return (
     <div ref={mountRef} data-testid="maze-canvas" className="w-full h-full relative select-none" style={{ touchAction: "none", cursor: locked ? "none" : "default" }}>
       {locked && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10" style={{ mixBlendMode: "difference" }}>
           <div style={{ position: "relative", width: 20, height: 20 }}>
-            <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: 2, height: 14, background: "rgba(255,255,255,0.85)" }} />
-            <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: 14, height: 2, background: "rgba(255,255,255,0.85)" }} />
+            <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: 2, height: 14, background: "rgba(255,255,255,0.95)" }} />
+            <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: 14, height: 2, background: "rgba(255,255,255,0.95)" }} />
           </div>
         </div>
       )}
