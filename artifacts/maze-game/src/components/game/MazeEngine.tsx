@@ -363,13 +363,12 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
       if (canvas) canvas.style.cursor = isLocked ? "none" : "crosshair";
     };
 
-    const onClick = (e: MouseEvent) => {
+    const onPointerDown = (e: PointerEvent) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const target = e.target as Node | null;
-      if (target && canvas.contains(target)) {
-        canvas.requestPointerLock();
-      }
+      if (e.target !== canvas) return;
+      canvas.setPointerCapture?.(e.pointerId);
+      canvas.requestPointerLock();
     };
 
     document.addEventListener("pointerlockchange", onLockChange);
@@ -377,7 +376,7 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup",   onKeyUp);
     document.addEventListener("mousemove", onMouseMove);
-    canvasRef.current?.addEventListener("click", onClick);
+    canvasRef.current?.addEventListener("pointerdown", onPointerDown);
 
     return () => {
       if (cleanup) cleanup();
@@ -389,7 +388,7 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup",   onKeyUp);
       document.removeEventListener("mousemove", onMouseMove);
-      canvasRef.current?.removeEventListener("click", onClick);
+      canvasRef.current?.removeEventListener("pointerdown", onPointerDown);
       if (mountRef.current && rendererRef.current) {
         mountRef.current.removeChild(rendererRef.current.domElement);
       }
