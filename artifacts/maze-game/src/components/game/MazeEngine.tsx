@@ -149,8 +149,8 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
     canvasRef.current = renderer.domElement;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x04000f);
-    scene.fog = new THREE.FogExp2(0x04000f, 0.042);
+    scene.background = new THREE.Color(0xf8f1e7);
+    scene.fog = new THREE.FogExp2(0xf8f1e7, 0.018);
     const camera = new THREE.PerspectiveCamera(80, W / H, 0.05, 120);
     camera.rotation.order = "YXZ";
 
@@ -161,9 +161,9 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
     const totalW = mazeW * CELL_SIZE;
     const totalH = mazeH * CELL_SIZE;
 
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0x0b0921, roughness: 0.95, metalness: 0.05 });
-    const ceilMat = new THREE.MeshStandardMaterial({ color: 0x07051a, roughness: 1.0, metalness: 0.0 });
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x100d30, roughness: 0.85, metalness: 0.08 });
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0xe9dcc7, roughness: 0.9, metalness: 0.02 });
+    const ceilMat = new THREE.MeshStandardMaterial({ color: 0xf4efe6, roughness: 1.0, metalness: 0.0 });
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xd9c8ab, roughness: 0.85, metalness: 0.04 });
 
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(totalW + 2, totalH + 2), floorMat);
     floor.rotation.x = -Math.PI / 2;
@@ -201,8 +201,8 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
       flickerLights.push(light);
     }
     flickerRef.current = flickerLights;
-    scene.add(new THREE.AmbientLight(0x1a1040, 1.4));
-    scene.add(new THREE.HemisphereLight(0x2a1060, 0x080418, 0.7));
+    scene.add(new THREE.AmbientLight(0xffffff, 1.8));
+    scene.add(new THREE.HemisphereLight(0xfff4d9, 0xe7dcc8, 1.2));
 
     const entityCount = Math.floor(complexity * 0.6);
     for (let i = 0; i < entityCount; i++) {
@@ -280,7 +280,7 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
         }
         const mat = entity.material as THREE.MeshBasicMaterial;
         if (isUV && dist < preset.distance) { mat.color.set(0xff00ff); mat.opacity = 0.9; }
-        else { mat.color.set(0x440066); mat.opacity = dist < 12 ? 0.55 + Math.sin(t * 3.5) * 0.25 : 0; }
+        else { mat.color.set(0xa97d4f); mat.opacity = dist < 12 ? 0.55 + Math.sin(t * 3.5) * 0.25 : 0; }
       });
       if (Math.round(t * 60) % 60 === 0 && onPositionChange) onPositionChange({ x: player.x, y: player.y, z: player.z, mapId: `server_${serverId || "solo"}` });
       renderer.render(scene, camera);
@@ -387,22 +387,6 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
           <div style={{ position: "relative", width: 20, height: 20 }}>
             <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: 2, height: 14, background: "rgba(255,255,255,0.85)" }} />
             <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: 14, height: 2, background: "rgba(255,255,255,0.85)" }} />
-          </div>
-        </div>
-      )}
-      {!locked && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none" style={{ background: "rgba(4,0,15,0.72)", backdropFilter: "blur(3px)" }}>
-          <div className="text-center px-8 py-6 rounded-2xl border border-purple-500/25" style={{ background: "rgba(16,8,48,0.8)" }}>
-            <p className="text-2xl font-bold mb-1 text-white/90">클릭하여 게임 시작</p>
-            <p className="text-sm text-purple-300/70 mb-4">마우스로 시점을 조정합니다</p>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-1.5 text-xs text-white/50 text-left">
-              <span><span className="text-white/80 font-mono bg-white/10 px-1.5 py-0.5 rounded mr-1">WASD</span> 이동</span>
-              <span><span className="text-white/80 font-mono bg-white/10 px-1.5 py-0.5 rounded mr-1">마우스</span> 시점</span>
-              <span><span className="text-white/80 font-mono bg-white/10 px-1.5 py-0.5 rounded mr-1">Shift</span> 점프</span>
-              <span><span className="text-white/80 font-mono bg-white/10 px-1.5 py-0.5 rounded mr-1">F</span> 손전등</span>
-              <span><span className="text-white/80 font-mono bg-white/10 px-1.5 py-0.5 rounded mr-1">ESC</span> 해제</span>
-              <span><span className="text-white/80 font-mono bg-white/10 px-1.5 py-0.5 rounded mr-1">V</span> 2D 맵</span>
-            </div>
           </div>
         </div>
       )}
