@@ -18,10 +18,7 @@ export const FLASHLIGHT_PRESETS: Record<string, FlashlightConfig> = {
   flashlight_dreamcore: { color: 0xffe57f, intensity: 6, distance: 28, angle: Math.PI / 6, penumbra: 0.4 },
 };
 
-const LOOK_MIN = -1;
-const LOOK_MAX = 1;
-const LOOK_SPEED = 0.018;
-const LOOK_SMOOTHING = 0.18;
+const LOOK_SPEED = 0.0024;
 
 interface MazeEngineProps {
   serverId?: number | null;
@@ -125,7 +122,7 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
   const [locked, setLocked] = useState(false);
 
   const playerRef = useRef({ x: CELL_SIZE / 2, y: PLAYER_HEIGHT, z: CELL_SIZE / 2, yaw: 0, pitch: 0, velY: 0, onGround: true });
-  const lookStateRef = useRef({ yaw: 0, pitch: 0, targetYaw: 0, targetPitch: 0, dragging: false, lastX: 0, lastY: 0 });
+  const lookStateRef = useRef({ dragging: false, lastX: 0, lastY: 0 });
   const keysRef = useRef<Record<string, boolean>>({});
   const flickerRef = useRef<THREE.PointLight[]>([]);
   const entityRef = useRef<THREE.Mesh[]>([]);
@@ -262,9 +259,6 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
       const bobY = isMoving ? Math.sin(bobRef.current) * 0.035 : 0;
       const bobX = isMoving ? Math.sin(bobRef.current * 0.5) * 0.012 : 0;
       camera.position.set(player.x, player.y + bobY, player.z);
-      player.yaw += (lookStateRef.current.targetYaw - player.yaw) * LOOK_SMOOTHING;
-      player.pitch += (lookStateRef.current.targetPitch - player.pitch) * LOOK_SMOOTHING;
-      player.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, player.pitch));
       camera.rotation.y = player.yaw;
       camera.rotation.x = player.pitch + bobX;
       camera.rotation.z = 0;
@@ -308,7 +302,11 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
   useEffect(() => {
     const cleanup = initScene();
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") return;
+      if (e.key === "Escape") {
+        if (document.pointerLockElement === canvasRef.current) document.exitPointerLock();
+        lookStateRef.current.dragging = false;
+        return;
+      }
       keysRef.current[e.key.toLowerCase()] = true;
       keysRef.current[e.key] = true;
       if (e.key.toLowerCase() === "f") {
@@ -327,9 +325,9 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
       const dy = lockedRef.current ? e.movementY : e.clientY - lookStateRef.current.lastY;
       lookStateRef.current.lastX = e.clientX;
       lookStateRef.current.lastY = e.clientY;
-      lookStateRef.current.targetYaw -= dx * LOOK_SPEED;
-      lookStateRef.current.targetPitch -= dy * LOOK_SPEED;
-      lookStateRef.current.targetPitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, lookStateRef.current.targetPitch));
+      playerRef.current.yaw -= dx * LOOK_SPEED;
+      playerRef.current.pitch -= dy * LOOK_SPEED;
+      playerRef.current.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, playerRef.current.pitch));
     };
     const onPointerLockChange = () => {
       const isLocked = document.pointerLockElement === canvasRef.current;
@@ -343,12 +341,19 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
       lookStateRef.current.lastX = e.clientX;
       lookStateRef.current.lastY = e.clientY;
       if (document.pointerLockElement !== canvas) canvas.requestPointerLock();
+      canvas.style.cursor = "none";
     };
     const onMouseUp = () => {
       lookStateRef.current.dragging = false;
+      if (document.pointerLockElement !== canvasRef.current) {
+        const canvas = canvasRef.current;
+        if (canvas) canvas.style.cursor = "default";
+      }
     };
     const onBlur = () => {
       lookStateRef.current.dragging = false;
+      const canvas = canvasRef.current;
+      if (canvas) canvas.style.cursor = "default";
     };
     document.addEventListener("pointerlockchange", onPointerLockChange);
     window.addEventListener("keydown", onKeyDown);
@@ -357,6 +362,7 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
     mountRef.current?.addEventListener("mousedown", onMouseDown);
     window.addEventListener("mouseup", onMouseUp);
     window.addEventListener("blur", onBlur);
+    document.addEventListener("mouseleave", onMouseUp);
     return () => {
       if (cleanup) cleanup();
       cancelAnimationFrame(animFrameRef.current);
@@ -369,6 +375,7 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
       mountRef.current?.removeEventListener("mousedown", onMouseDown);
       window.removeEventListener("mouseup", onMouseUp);
       window.removeEventListener("blur", onBlur);
+      document.removeEventListener("mouseleave", onMouseUp);
       if (mountRef.current && rendererRef.current) mountRef.current.removeChild(rendererRef.current.domElement);
     };
   }, [initScene, onFlashlightChange]);
