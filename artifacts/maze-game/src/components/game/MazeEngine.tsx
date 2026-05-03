@@ -366,6 +366,8 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
     const onPointerDown = (e: PointerEvent) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
+      e.preventDefault();
+      if (document.pointerLockElement === canvas) return;
       canvas.requestPointerLock();
     };
 
@@ -374,7 +376,7 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup",   onKeyUp);
     document.addEventListener("mousemove", onMouseMove);
-    canvasRef.current?.addEventListener("pointerdown", onPointerDown);
+    canvasRef.current?.addEventListener("pointerdown", onPointerDown, { passive: false });
 
     return () => {
       if (cleanup) cleanup();
