@@ -367,7 +367,6 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
       const canvas = canvasRef.current;
       if (!canvas) return;
       if (e.target !== canvas) return;
-      canvas.setPointerCapture?.(e.pointerId);
       canvas.requestPointerLock();
     };
 
