@@ -2,7 +2,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import MazeEngine, { FLASHLIGHT_PRESETS } from "@/components/game/MazeEngine";
+import MazeEngine from "@/components/game/MazeEngine";
 import ChatSystem from "@/components/game/ChatSystem";
 import HUD from "@/components/game/HUD";
 import Minimap from "@/components/game/Minimap";
