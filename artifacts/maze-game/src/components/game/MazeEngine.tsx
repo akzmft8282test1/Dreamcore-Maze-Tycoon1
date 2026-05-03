@@ -24,6 +24,7 @@ interface MazeEngineProps {
   equippedFlashlight?: string | null;
   onPositionChange?: (pos: { x: number; y: number; z: number; mapId: string }) => void;
   onFlashlightChange?: (on: boolean) => void;
+  usePointerLock?: boolean;
 }
 
 interface MazeCell {
@@ -123,13 +124,14 @@ function makeWallTex(size=128): THREE.DataTexture {
   return tex;
 }
 
-export default function MazeEngine({ serverId, complexity=5, equippedFlashlight, onPositionChange, onFlashlightChange }: MazeEngineProps) {
+export default function MazeEngine({ serverId, complexity=5, equippedFlashlight, onPositionChange, onFlashlightChange, usePointerLock = false }: MazeEngineProps) {
   const mountRef      = useRef<HTMLDivElement>(null);
   const canvasRef     = useRef<HTMLCanvasElement|null>(null);
   const rendererRef   = useRef<THREE.WebGLRenderer|null>(null);
   const animFrameRef  = useRef<number>(0);
   const lockedRef     = useRef(false);
   const [locked, setLocked] = useState(false);
+  const dragRef = useRef({ active: false, lastX: 0, lastY: 0 });
 
   const playerRef     = useRef({ x: CELL/2, y: P_HEIGHT, z: CELL/2, yaw: 0, pitch: 0 });
   const keysRef       = useRef<Record<string,boolean>>({});
@@ -348,10 +350,21 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
 
     // Mouse look — pointer lock only
     const onMouseMove = (e: MouseEvent) => {
-      if (!lockedRef.current) return;
+      if (lockedRef.current) {
+        const pl = playerRef.current;
+        pl.yaw   -= e.movementX * SENS;
+        pl.pitch -= e.movementY * SENS;
+        pl.pitch  = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pl.pitch));
+        return;
+      }
+      if (!dragRef.current.active) return;
+      const dx = e.clientX - dragRef.current.lastX;
+      const dy = e.clientY - dragRef.current.lastY;
+      dragRef.current.lastX = e.clientX;
+      dragRef.current.lastY = e.clientY;
       const pl = playerRef.current;
-      pl.yaw   -= e.movementX * SENS;
-      pl.pitch -= e.movementY * SENS;
+      pl.yaw   -= dx * 0.004;
+      pl.pitch -= dy * 0.004;
       pl.pitch  = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pl.pitch));
     };
 
@@ -367,8 +380,20 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
       const canvas = canvasRef.current;
       if (!canvas) return;
       e.preventDefault();
+      dragRef.current.active = true;
+      dragRef.current.lastX = e.clientX;
+      dragRef.current.lastY = e.clientY;
+      if (!usePointerLock) return;
       if (document.pointerLockElement === canvas) return;
       canvas.requestPointerLock();
+    };
+
+    const onPointerUp = () => {
+      dragRef.current.active = false;
+    };
+
+    const onPointerLeave = () => {
+      dragRef.current.active = false;
     };
 
     document.addEventListener("pointerlockchange", onLockChange);
@@ -377,6 +402,8 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
     window.addEventListener("keyup",   onKeyUp);
     document.addEventListener("mousemove", onMouseMove);
     canvasRef.current?.addEventListener("pointerdown", onPointerDown, { passive: false });
+    canvasRef.current?.addEventListener("pointerup", onPointerUp);
+    canvasRef.current?.addEventListener("pointerleave", onPointerLeave);
 
     return () => {
       if (cleanup) cleanup();
@@ -389,6 +416,8 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
       window.removeEventListener("keyup",   onKeyUp);
       document.removeEventListener("mousemove", onMouseMove);
       canvasRef.current?.removeEventListener("pointerdown", onPointerDown);
+      canvasRef.current?.removeEventListener("pointerup", onPointerUp);
+      canvasRef.current?.removeEventListener("pointerleave", onPointerLeave);
       if (mountRef.current && rendererRef.current) {
         mountRef.current.removeChild(rendererRef.current.domElement);
       }
