@@ -157,11 +157,8 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
   const wallBoxRef = useRef<WallBox[]>([]);
   const bobRef = useRef(0);
   const posTickRef = useRef(0);
-  const initializedRef = useRef(false);
 
   useEffect(() => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
     if (!mountRef.current) return;
 
     const W = mountRef.current.clientWidth;
@@ -347,17 +344,6 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
     };
     window.addEventListener("resize", onResize);
 
-    return () => {
-      window.removeEventListener("resize", onResize);
-      cancelAnimationFrame(animFrameRef.current);
-      if (mountRef.current && rendererRef.current?.domElement.parentNode === mountRef.current) {
-        mountRef.current.removeChild(rendererRef.current.domElement);
-      }
-      renderer.dispose();
-    };
-  }, [complexity, equippedFlashlight, onPositionChange, serverId]);
-
-  useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (document.pointerLockElement === canvasRef.current) document.exitPointerLock();
@@ -405,6 +391,8 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
     canvas?.addEventListener("pointerdown", onPointerDown);
 
     return () => {
+      window.removeEventListener("resize", onResize);
+      cancelAnimationFrame(animFrameRef.current);
       document.removeEventListener("pointerlockchange", onLockChange);
       document.removeEventListener("pointerlockerror", onLockChange);
       window.removeEventListener("keydown", onKeyDown);
@@ -412,8 +400,15 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
       document.removeEventListener("mousemove", onMouseMove);
       canvas?.removeEventListener("pointerdown", onPointerDown);
       if (document.pointerLockElement === canvasRef.current) document.exitPointerLock();
+      if (mountRef.current && rendererRef.current?.domElement.parentNode === mountRef.current) {
+        mountRef.current.removeChild(rendererRef.current.domElement);
+      }
+      renderer.dispose();
+      rendererRef.current = null;
+      canvasRef.current = null;
+      lockedRef.current = false;
     };
-  }, [onFlashlightChange]);
+  }, [complexity, equippedFlashlight, onPositionChange, serverId]);
 
   return (
     <div ref={mountRef} data-testid="maze-canvas" className="w-full h-full relative select-none" style={{ touchAction: "none", cursor: lockedRef.current ? "none" : "crosshair" }}>

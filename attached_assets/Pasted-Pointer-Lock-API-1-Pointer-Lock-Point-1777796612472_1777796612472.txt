@@ -1,0 +1,194 @@
+Pointer Lock API — 단계별 완전 설명
+🔒 1. Pointer Lock이 뭔가요?
+브라우저의 마우스는 보통 화면 어딘가에 "절대 위치"로 존재합니다.
+Pointer Lock을 걸면 커서가 사라지고, 마우스가 화면 밖으로 나가지 않으며, mousemove 이벤트에서 "얼마나 움직였는지(델타)"만 전달됩니다.
+
+일반 마우스:   e.clientX = 450, e.clientY = 230  ← 절대 좌표
+포인터락 후:   e.movementX = -3, e.movementY = 1  ← 이번 프레임 이동량만
+
+FPS 게임에서 마우스를 아무리 오른쪽으로 움직여도 화면 밖으로 안 나가는 이유가 바로 이것입니다.
+
+🔑 2. 핵심 API 3개
+// 1. 잠금 요청 — 반드시 사용자 이벤트(클릭 등) 안에서 호출해야 함
+element.requestPointerLock();
+// 2. 잠금 해제 — ESC 키로도 자동 해제됨
+document.exitPointerLock();
+// 3. 현재 어느 요소가 잠겨있는지 확인
+document.pointerLockElement; // 잠긴 요소, 없으면 null
+
+🖱️ 3. 이벤트 흐름
+사용자 클릭
+    ↓
+element.requestPointerLock() 호출
+    ↓
+브라우저가 권한 요청 (최초 1회)
+    ↓
+pointerlockchange 이벤트 발생
+    ↓
+이제 mousemove에서 movementX/Y 사용 가능
+    ↓
+ESC 누르면 → pointerlockchange 다시 발생 (해제)
+
+📦 4. 최소 예제 — 순수 JS
+<!DOCTYPE html>
+<html>
+<body style="margin:0; background:#000; overflow:hidden">
+<canvas id="c" style="display:block"></canvas>
+<div id="msg" style="
+  position:fixed; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  color:white; font-size:24px; text-align:center
+">
+  클릭하면 마우스가 잠깁니다
+</div>
+<script>
+const canvas = document.getElementById('c');
+const msg    = document.getElementById('msg');
+canvas.width  = window.innerWidth;
+canvas.height = window.innerHeight;
+const ctx = canvas.getContext('2d');
+// ─── 상태 ───────────────────────────────────────────
+let yaw   = 0;  // 좌우 누적 회전값 (라디안)
+let pitch = 0;  // 상하 누적 회전값 (라디안)
+let locked = false;
+// ─── 1단계: 클릭 → 포인터락 요청 ────────────────────
+canvas.addEventListener('click', () => {
+  canvas.requestPointerLock();
+});
+// ─── 2단계: 잠금 상태 변화 감지 ─────────────────────
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === canvas;
+  msg.style.display = locked ? 'none' : 'block';
+  msg.textContent = locked ? '' : 'ESC로 해제됨. 다시 클릭하세요.';
+});
+// ─── 3단계: movementX/Y로 각도 누적 ─────────────────
+document.addEventListener('mousemove', (e) => {
+  if (!locked) return;              // 잠금 아닐 때는 무시
+  const sensitivity = 0.003;
+  yaw   += e.movementX * sensitivity;  // 오른쪽 = yaw 증가
+  pitch += e.movementY * sensitivity;  // 아래쪽 = pitch 증가
+  pitch = Math.max(-1.2, Math.min(1.2, pitch)); // 고개 꺾임 한계
+});
+// ─── 시각화: 각도를 화면에 표시 ─────────────────────
+function draw() {
+  requestAnimationFrame(draw);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const cx = canvas.width  / 2;
+  const cy = canvas.height / 2;
+  // yaw → 수평 막대가 회전
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(yaw);
+  ctx.strokeStyle = '#ff00ff';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(-100, 0);
+  ctx.lineTo( 100, 0);
+  ctx.stroke();
+  ctx.restore();
+  // pitch → 수직 막대가 기울어짐
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(pitch);
+  ctx.strokeStyle = '#00ffff';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, -100);
+  ctx.lineTo(0,  100);
+  ctx.stroke();
+  ctx.restore();
+  // 조준점
+  ctx.fillStyle = 'white';
+  ctx.fillRect(cx - 4, cy - 1, 8, 2);
+  ctx.fillRect(cx - 1, cy - 4, 2, 8);
+  // 수치 표시
+  ctx.fillStyle = '#aaa';
+  ctx.font = '14px monospace';
+  ctx.fillText(`yaw  (좌우): ${(yaw * 180 / Math.PI).toFixed(1)}°`, 20, 30);
+  ctx.fillText(`pitch(상하): ${(pitch * 180 / Math.PI).toFixed(1)}°`, 20, 50);
+  ctx.fillText(`잠금: ${locked ? '✅' : '❌'}`, 20, 70);
+}
+draw();
+</script>
+</body>
+</html>
+
+🎮 5. Three.js 1인칭 카메라에 적용하는 방법
+// yaw, pitch를 카메라 회전에 적용할 때
+// ⚠️ 순서가 중요합니다: 반드시 "YXZ"
+camera.quaternion.setFromEuler(
+  new THREE.Euler(pitch, yaw, 0, "YXZ")
+  //              ↑상하  ↑좌우      ↑순서
+);
+
+왜 YXZ 순서인가요?
+"XYZ" (기본값) — 잘못된 동작
+  1. 상하(X)를 먼저 회전
+  2. 그 상태에서 좌우(Y) 회전
+  → 고개를 숙인 채 좌우를 돌리면 화면이 이상하게 기울어짐 ("짐벌락")
+"YXZ" — 1인칭에서 올바른 동작
+  1. 좌우(Y)를 먼저 회전 → "몸통이 먼저 돌고"
+  2. 그 다음 상하(X) 회전 → "그 방향으로 고개를 드는" 순서
+  → 어떤 방향을 봐도 수평이 유지됨
+
+🧱 6. 이동벡터 계산 (yaw만 사용)
+// yaw 각도 → 실제 3D 방향 벡터
+//
+//        앞(forward)
+//           ↑
+//  왼(left) ← → 오른(right)
+//           ↓
+//
+// yaw=0 일 때: forward = (0, 0, -1) (Three.js의 기본 "앞")
+// yaw가 커질수록 시계방향으로 회전
+const forward = new THREE.Vector3(
+  -Math.sin(yaw),   // x
+   0,               // y (수평 이동이므로 0)
+  -Math.cos(yaw)    // z
+);
+const right = new THREE.Vector3(
+   Math.cos(yaw),   // x
+   0,               // y
+  -Math.sin(yaw)    // z
+);
+// pitch는 이동 방향 계산에 쓰지 않습니다
+// (하늘을 봐도 수평으로 걷는 FPS 스타일)
+
+🧱 7. 충돌 감지 — X/Z 독립 처리
+const RADIUS = 0.3; // 플레이어 반지름
+// ❌ 나쁜 방법: XZ를 한번에 이동
+// → 대각선 벽에 부딪히면 완전히 멈춤
+// ✅ 좋은 방법: X, Z를 따로 처리
+// → 한 축이 막혀도 다른 축으로 슬라이딩
+// X축 이동 시도
+const nextX = pos.x + move.x;
+const gridX = Math.floor(nextX);
+const gridZ = Math.floor(pos.z);
+if (!isWall(gridX, gridZ) && !isWall(gridX, Math.floor(pos.z + RADIUS))
+                           && !isWall(gridX, Math.floor(pos.z - RADIUS))) {
+  pos.x = nextX;
+}
+// Z축 이동 시도
+const nextZ = pos.z + move.z;
+if (!isWall(Math.floor(pos.x + RADIUS), Math.floor(nextZ))
+ && !isWall(Math.floor(pos.x - RADIUS), Math.floor(nextZ))) {
+  pos.z = nextZ;
+}
+
+🗺️ 전체 구조 한눈에
+클릭
+ └─ requestPointerLock()
+      └─ pointerlockchange 이벤트
+           └─ locked = true
+매 프레임 mousemove
+ └─ movementX → yaw  누적
+ └─ movementY → pitch 누적
+      └─ camera.quaternion.setFromEuler(pitch, yaw, 0, "YXZ")
+매 프레임 키입력
+ └─ WASD → forward/right 벡터 계산 (yaw 기반)
+      └─ X축 이동 → 충돌 체크 → 적용
+      └─ Z축 이동 → 충돌 체크 → 적용
+ESC 키
+ └─ 브라우저가 자동으로 exitPointerLock()
+      └─ pointerlockchange 이벤트
+           └─ locked = false
