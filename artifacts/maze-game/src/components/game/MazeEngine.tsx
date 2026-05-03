@@ -465,7 +465,6 @@ interface EntityDim2Data {
 interface Dim2Data {
   scene: THREE.Scene;
   wallBoxes: WallBox[];
-  entitySprites: THREE.Sprite[];
   entityGroups: EntityDim2Data[];
   balls: BeachBallData[];
 }
@@ -599,17 +598,8 @@ function buildDim2(): Dim2Data {
 
   // ── 비치볼 ───────────────────────────────────────────────────────────────
   const BALL_COLORS = [0xff3344, 0x2255ee, 0xffcc00, 0xff66bb, 0x33ee88, 0xff7700, 0x9933ff, 0x00ccff];
-  const ballCells: [number, number][] = [[1,1],[2,4],[4,2],[6,1],[3,6],[5,3],[1,6],[7,2]];
   const balls: BeachBallData[] = [];
-
-  for (let bi = 0; bi < ballCells.length; bi++) {
-    const [br, bc] = ballCells[bi];
-    if (br >= DIM2_MH || bc >= DIM2_MW) continue;
-    const bx = bc * CELL + CELL / 2;
-    const bz = br * CELL + CELL / 2;
-    const radius = 0.38 + (bi % 3) * 0.06;
-    const col = BALL_COLORS[bi % BALL_COLORS.length];
-
+  const makeBall = (bx: number, bz: number, radius: number, col: number) => {
     const ballGroup = new THREE.Group();
     ballGroup.add(new THREE.Mesh(
       new THREE.SphereGeometry(radius, 16, 12),
@@ -626,6 +616,11 @@ function buildDim2(): Dim2Data {
     ballGroup.position.set(bx, radius, bz);
     scene.add(ballGroup);
     balls.push({ group: ballGroup, vel: new THREE.Vector3(), radius, collected: false });
+  };
+  for (let i = 0; i < 96; i++) {
+    const cx = 1 + (i * 3) % (DIM2_MW - 1);
+    const cz = 1 + (i * 5) % (DIM2_MH - 1);
+    makeBall(cx * CELL + CELL / 2, cz * CELL + CELL / 2, 0.38 + (i % 3) * 0.06, BALL_COLORS[i % BALL_COLORS.length]);
   }
 
   // ── 꽃-눈 엔티티 ─────────────────────────────────────────────────────────
@@ -649,7 +644,7 @@ function buildDim2(): Dim2Data {
     });
   }
 
-  return { scene, wallBoxes, entitySprites: [], entityGroups, balls };
+  return { scene, wallBoxes, entityGroups, balls };
 }
 
 // ─── 컴포넌트 ────────────────────────────────────────────────────────────────
@@ -924,8 +919,12 @@ export default function MazeEngine({
             fallYRef.current = 0;
             fallSpeedRef.current = 0;
             setFalling(false);
-            // 새 미로로 — 차원1 복귀
-            resetToDim1();
+            const rebuilt = buildDim2();
+            dim2DataRef.current = rebuilt;
+            activeSceneRef.current = rebuilt.scene;
+            wallBoxRef.current = rebuilt.wallBoxes;
+            pos.x = Math.floor(DIM2_MW / 2) * CELL + CELL / 2;
+            pos.z = Math.floor(DIM2_MH / 2) * CELL + CELL / 2;
             return;
           }
         }
@@ -1118,7 +1117,7 @@ export default function MazeEngine({
             style={{ background:"rgba(20,60,100,0.55)", color:"rgba(180,230,255,0.95)", border:"1px solid rgba(100,200,255,0.25)", backdropFilter:"blur(4px)" }}>
             <span style={{ fontSize:"14px" }}>🏐</span>
             <span className="font-bold">{inventory}</span>
-            <span style={{ color:"rgba(140,200,255,0.6)" }}>/ 8</span>
+            <span style={{ color:"rgba(140,200,255,0.6)" }}>/ ∞</span>
           </div>
         </div>
       )}
