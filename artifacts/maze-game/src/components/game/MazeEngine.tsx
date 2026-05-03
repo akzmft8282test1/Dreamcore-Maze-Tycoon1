@@ -356,24 +356,28 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
     };
 
     const onLockChange = () => {
-      const isLocked = document.pointerLockElement === canvasRef.current;
+      const canvas = canvasRef.current;
+      const isLocked = document.pointerLockElement === canvas;
       lockedRef.current = isLocked;
       setLocked(isLocked);
+      if (canvas) canvas.style.cursor = isLocked ? "none" : "crosshair";
     };
 
-    const onClick = () => {
-      // Click canvas to grab pointer lock
-      if (canvasRef.current && document.pointerLockElement !== canvasRef.current) {
-        canvasRef.current.requestPointerLock();
+    const onClick = (e: MouseEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const target = e.target as Node | null;
+      if (target && canvas.contains(target)) {
+        canvas.requestPointerLock();
       }
     };
 
     document.addEventListener("pointerlockchange", onLockChange);
-    document.addEventListener("pointerlockerror",  onLockChange);
+    document.addEventListener("pointerlockerror", onLockChange);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup",   onKeyUp);
     document.addEventListener("mousemove", onMouseMove);
-    mountRef.current?.addEventListener("click", onClick);
+    canvasRef.current?.addEventListener("click", onClick);
 
     return () => {
       if (cleanup) cleanup();
@@ -381,10 +385,11 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
       if (document.pointerLockElement === canvasRef.current) document.exitPointerLock();
       rendererRef.current?.dispose();
       document.removeEventListener("pointerlockchange", onLockChange);
-      document.removeEventListener("pointerlockerror",  onLockChange);
+      document.removeEventListener("pointerlockerror", onLockChange);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup",   onKeyUp);
       document.removeEventListener("mousemove", onMouseMove);
+      canvasRef.current?.removeEventListener("click", onClick);
       if (mountRef.current && rendererRef.current) {
         mountRef.current.removeChild(rendererRef.current.domElement);
       }
