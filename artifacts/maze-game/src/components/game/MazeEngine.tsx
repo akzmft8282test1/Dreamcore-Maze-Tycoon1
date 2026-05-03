@@ -130,6 +130,7 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
   const animFrameRef  = useRef<number>(0);
   const lockedRef     = useRef(false);
   const [locked, setLocked] = useState(false);
+  const [pointerLockGranted, setPointerLockGranted] = useState(false);
 
   const playerRef     = useRef({ x: CELL/2, y: P_HEIGHT, z: CELL/2, yaw: 0, pitch: 0 });
   const keysRef       = useRef<Record<string,boolean>>({});
@@ -360,6 +361,7 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
       const isLocked = document.pointerLockElement === canvas;
       lockedRef.current = isLocked;
       setLocked(isLocked);
+      if (isLocked) setPointerLockGranted(true);
       if (canvas) canvas.style.cursor = isLocked ? "none" : "crosshair";
     };
 
@@ -368,11 +370,19 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
       if (!canvas) return;
       e.preventDefault();
       if (document.pointerLockElement === canvas) return;
-      if (canvas.requestPointerLock) {
-        canvas.requestPointerLock({ unadjustedMovement: true });
-      } else {
-        canvas.requestPointerLock();
-      }
+      const requestLock = () => {
+        try {
+          canvas.requestPointerLock({ unadjustedMovement: true });
+        } catch {
+          canvas.requestPointerLock();
+        }
+      };
+      void navigator.permissions?.query({ name: "pointer-lock" as PermissionName })
+        .then((result) => {
+          if (result.state === "denied") return;
+          requestLock();
+        })
+        .catch(() => requestLock());
     };
 
     document.addEventListener("pointerlockchange", onLockChange);
@@ -422,7 +432,7 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
       {!locked && (
         <div className="absolute inset-0 flex items-end justify-center pb-10 pointer-events-none z-10">
           <p className="text-xs px-3 py-1.5 rounded-full" style={{ background:"rgba(0,0,0,0.45)", color:"rgba(255,245,180,0.85)", letterSpacing:"0.05em" }}>
-            클릭하여 시점 조작 · ESC로 해제
+            {pointerLockGranted ? "클릭하여 다시 시점 조작 · ESC로 해제" : "클릭하여 포인터 잠금 허용 · ESC로 해제"}
           </p>
         </div>
       )}

@@ -1,0 +1,110 @@
+requestpointerlock API
+requestPointerLock는 웹 브라우저에서 마우스 포인터를 특정 요소에 고정하고, 마우스 이동을 JavaScript에서 직접 제어할 수 있도록 하는 메서드입니다. 주로 3D 게임, 360도 뷰어, 마우스 드래그 기반 애플리케이션에서 사용됩니다.
+
+사용법
+
+
+element.requestPointerLock();
+
+
+여기서 element는 마우스 포인터를 고정할 HTML 요소입니다.
+Pointer Lock 동작 방식
+
+element.requestPointerLock()을 호출하면 브라우저가 마우스 포인터를 숨기고, 특정 요소에 포커스를 맞춥니다.
+이후 mousemove 이벤트에서 마우스의 상대적 이동 값을 감지할 수 있습니다.
+사용자가 Esc 키를 누르거나 document.exitPointerLock()을 호출하면 Pointer Lock이 해제됩니다.
+
+
+예제 코드
+
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pointer Lock 예제</title>
+</head>
+<body>
+    <button id="lockButton">마우스 고정</button>
+    <p id="output">마우스를 움직이면 이동 값이 표시됩니다.</p>
+
+    <script>
+        const lockButton = document.getElementById("lockButton");
+        const output = document.getElementById("output");
+
+        // 마우스 포인터 고정 요청
+        lockButton.addEventListener("click", () => {
+            document.body.requestPointerLock();
+        });
+
+        // 마우스 움직임 감지
+        document.addEventListener("mousemove", (event) => {
+            if (document.pointerLockElement === document.body) {
+                output.textContent = `X 이동: ${event.movementX}, Y 이동: ${event.movementY}`;
+            }
+        });
+
+        // 포인터 잠금 해제 감지
+        document.addEventListener("pointerlockchange", () => {
+            if (document.pointerLockElement !== document.body) {
+                output.textContent = "포인터 잠금 해제됨";
+            }
+        });
+    </script>
+</body>
+</html>
+
+
+
+이벤트 및 메서드
+
+
+
+메서드
+설명
+
+
+
+
+element.requestPointerLock()
+해당 요소에서 Pointer Lock 요청
+
+
+document.exitPointerLock()
+Pointer Lock 해제
+
+
+document.pointerLockElement
+현재 Pointer Lock이 설정된 요소 반환 (없으면 null)
+
+
+
+
+
+
+이벤트
+설명
+
+
+
+
+pointerlockchange
+Pointer Lock 상태가 변경될 때 발생
+
+
+pointerlockerror
+Pointer Lock 요청이 실패할 때 발생
+
+
+
+
+주의할 점
+
+requestPointerLock()은 반드시 사용자의 입력 이벤트(예: 클릭, 키 입력 등) 내에서 호출해야 합니다. 그렇지 않으면 보안상의 이유로 차단됩니다.
+사용자는 Esc 키를 눌러 Pointer Lock을 해제할 수 있습니다.
+마우스가 특정 요소 안에서 움직이는 것이 아니라 화면 기준 상대 이동 값 (movementX, movementY) 만 제공됩니다.
+
+
+이 기능은 FPS 게임처럼 마우스 이동을 직접 처리해야 하는 환경에서 유용합니다!
+출처: https://dimorin.tistory.com/entry/requestpointerlock-API#google_vignette [무찌르자 단팥빵:티스토리]
