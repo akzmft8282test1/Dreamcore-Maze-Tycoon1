@@ -366,7 +366,6 @@ export default function MazeEngine({ serverId, complexity=5, equippedFlashlight,
     const onPointerDown = (e: PointerEvent) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
-      if (e.target !== canvas) return;
       canvas.requestPointerLock();
     };
 
