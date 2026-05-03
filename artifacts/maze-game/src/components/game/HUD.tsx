@@ -37,9 +37,11 @@ interface HUDProps {
   is2DView?: boolean;
   roomNumber?: number;
   flashlightOn?: boolean;
+  fullBright?: boolean;
   equippedFlashlight?: string | null;
   ownedFlashlights?: FlashlightItem[];
   onEquipFlashlight?: (itemId: string | null) => void;
+  onToggleFullBright?: () => void;
 }
 
 export default function HUD({
@@ -48,9 +50,11 @@ export default function HUD({
   is2DView = false,
   roomNumber = 1,
   flashlightOn = true,
+  fullBright = false,
   equippedFlashlight,
   ownedFlashlights = [],
   onEquipFlashlight,
+  onToggleFullBright,
 }: HUDProps) {
   const { user } = useAuth();
   const { onlinePlayers, currentServerId } = useSocket();
@@ -115,6 +119,22 @@ export default function HUD({
                 <p className="text-[10px] text-muted-foreground/50">F: 켜기/끄기 · 클릭: 교체</p>
               </div>
               {ownedFlashlights.length > 0 && <span className="text-muted-foreground/40 text-xs">⇅</span>}
+            </div>
+          </button>
+
+          <button
+            onClick={onToggleFullBright}
+            className={`mt-2 w-full glass rounded-xl px-4 py-3 text-left hover:bg-white/5 transition-colors ${fullBright ? "ring-1 ring-yellow-300/40" : ""}`}
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">💡</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium truncate" style={{ color: fullBright ? "#ffe57f" : "#c9c9d8" }}>
+                  {fullBright ? "밝게 보기 켜짐" : "밝게 보기"}
+                </p>
+                <p className="text-[10px] text-muted-foreground/50">버튼: 전체 조명</p>
+              </div>
+              {fullBright && <span className="text-primary text-xs">✓</span>}
             </div>
           </button>
 

@@ -27,6 +27,7 @@ export default function GamePage() {
   const [playerPos, setPlayerPos] = useState({ x: 2, z: 2 });
   const [roomNumber, setRoomNumber] = useState(1);
   const [flashlightOn, setFlashlightOn] = useState(true);
+  const [fullBright, setFullBright] = useState(false);
   const { currentServerId, leaveServer } = useSocket();
   const { user } = useAuth();
   const updateState = useUpdateGameState();
@@ -76,7 +77,7 @@ export default function GamePage() {
             complexity={5}
             equippedFlashlight={equippedFlashlight}
             onPositionChange={handlePositionChange}
-            onFlashlightChange={setFlashlightOn}
+            onFlashlightChange={(on) => setFlashlightOn(on && !fullBright)}
           />
         )}
         {is2DView && (
@@ -97,9 +98,11 @@ export default function GamePage() {
         is2DView={is2DView}
         roomNumber={roomNumber}
         flashlightOn={flashlightOn}
+        fullBright={fullBright}
         equippedFlashlight={equippedFlashlight}
         ownedFlashlights={ownedFlashlights}
         onEquipFlashlight={handleEquipFlashlight}
+        onToggleFullBright={() => setFullBright(v => !v)}
       />
 
       <ChatSystem />
