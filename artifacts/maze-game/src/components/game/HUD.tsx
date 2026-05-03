@@ -172,7 +172,7 @@ export default function HUD({
 
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.5 }} className="absolute bottom-4 right-4 text-right z-10 text-xs text-muted-foreground/50 space-y-0.5">
         <p>WASD / 방향키 — 이동</p>
-        <p>클릭 — 포인터락 시작</p>
+        <p>클릭 — 포인터 잠금</p>
         <p>V — 뷰 전환</p>
         <p>F — 손전등 켜기/끄기</p>
         <p>Enter — 채팅</p>
