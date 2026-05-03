@@ -10,6 +10,7 @@ interface MazeEngineProps {
   equippedFlashlight?: string | null;
   pointerSensitivity?: number;
   initialPart?: number | null;
+  initialDimension?: 1 | 2 | null;
   onDoorZoneChange?: (zone: number | null) => void;
   onRoomChange?: (room: number | null) => void;
   onPositionChange?: (pos: { x: number; y: number; z: number; mapId: string }) => void;
@@ -606,6 +607,7 @@ export default function MazeEngine({
   equippedFlashlight,
   pointerSensitivity = 1,
   initialPart = null,
+  initialDimension = null,
   onDoorZoneChange,
   onRoomChange,
   onPositionChange,
@@ -620,6 +622,7 @@ export default function MazeEngine({
   const [gazeProgress, setGazeProgress] = useState(0);
   const [inventory, setInventory] = useState(0);
   const [falling, setFalling] = useState(false);
+  const initialAnnouncementSentRef = useRef(false);
 
   // refs
   const yawRef      = useRef(0);
@@ -670,6 +673,7 @@ export default function MazeEngine({
       wallBoxRef.current = dim1DataRef.current.wallBoxes;
     }
     onRoomChange?.(null);
+    initialAnnouncementSentRef.current = true;
   }, []);
 
   useEffect(() => {
@@ -701,6 +705,16 @@ export default function MazeEngine({
     activeSceneRef.current = d1.scene;
     wallBoxRef.current = d1.wallBoxes;
     flashRef.current = d1.flashlight;
+
+    if (!initialAnnouncementSentRef.current) {
+      if (initialDimension === 2) {
+        const targetPart = initialPart && initialPart > 0 ? initialPart : 1;
+        onRoomChange?.(targetPart);
+      } else {
+        onRoomChange?.(null);
+      }
+      initialAnnouncementSentRef.current = true;
+    }
 
     // ── Pointer Lock ─────────────────────────────────────────────────────────
     const onClick = () => { container.requestPointerLock(); };

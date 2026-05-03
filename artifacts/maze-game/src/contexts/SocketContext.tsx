@@ -33,6 +33,7 @@ interface SocketContextType {
   onlinePlayers: Map<number, OnlinePlayer>;
   sendChat: (channel: string, message: string) => void;
   sendPosition: (position: PlayerPosition) => void;
+  sendSystemChat: (message: string) => void;
   joinServer: (serverId: number) => void;
   leaveServer: () => void;
   currentServerId: number | null;
@@ -47,6 +48,7 @@ const SocketContext = createContext<SocketContextType>({
   onlinePlayers: new Map(),
   sendChat: () => {},
   sendPosition: () => {},
+  sendSystemChat: () => {},
   joinServer: () => {},
   leaveServer: () => {},
   currentServerId: null,
@@ -113,6 +115,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     socketRef.current?.emit("player:move", { position });
   };
 
+  const sendSystemChat = (message: string) => {
+    socketRef.current?.emit("chat:global", { message });
+  };
+
   const joinServer = (serverId: number) => {
     socketRef.current?.emit("server:join", { serverId });
     setCurrentServerId(serverId);
@@ -133,6 +139,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       onlinePlayers,
       sendChat,
       sendPosition,
+      sendSystemChat,
       joinServer,
       leaveServer,
       currentServerId,

@@ -1,5 +1,5 @@
 // 게임 메인 화면: Three.js 미로 + HUD + 채팅
-import { useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import MazeEngine from "@/components/game/MazeEngine";
@@ -23,6 +23,8 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function GamePage() {
   const [, setLocation] = useLocation();
+  const [initialPart, setInitialPart] = useState<number | null>(null);
+  const [initialDimension, setInitialDimension] = useState<1 | 2 | null>(null);
   const [is2DView, setIs2DView] = useState(false);
   const [playerPos, setPlayerPos] = useState({ x: 2, z: 2 });
   const [roomNumber, setRoomNumber] = useState(1);
@@ -35,6 +37,16 @@ export default function GamePage() {
   const equipSkin = useEquipSkin();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const partValue = params.get("part")?.replace("#", "");
+    const dimensionValue = params.get("dimension");
+    const parsedPart = Number.parseInt(partValue ?? "", 10);
+    const parsedDimension = Number.parseInt(dimensionValue ?? "", 10);
+    setInitialPart(Number.isFinite(parsedPart) && parsedPart > 0 ? parsedPart : null);
+    setInitialDimension(parsedDimension === 2 ? 2 : 1);
+  }, []);
   const upgradeItems = useMemo(() => [
     { id: "speed_boost", name: "이동 속도", desc: "빠르게 이동", max: 5, cost: 300 },
     { id: "vision_enhance", name: "시야 강화", desc: "손전등 범위 증가", max: 5, cost: 400 },
@@ -85,6 +97,11 @@ export default function GamePage() {
             complexity={5}
             equippedFlashlight={equippedFlashlight}
             pointerSensitivity={pointerSensitivity}
+            initialPart={initialPart}
+            initialDimension={initialDimension}
+            onDoorZoneChange={(zone) => {
+              if (zone) toast({ title: "문 위치", description: `${zone}번 구역에 문이 있어요` });
+            }}
             onPositionChange={handlePositionChange}
             onFlashlightChange={(on) => setFlashlightOn(on && !fullBright)}
           />
