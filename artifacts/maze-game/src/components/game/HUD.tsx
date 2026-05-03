@@ -42,6 +42,9 @@ interface HUDProps {
   ownedFlashlights?: FlashlightItem[];
   onEquipFlashlight?: (itemId: string | null) => void;
   onToggleFullBright?: () => void;
+  pointerSensitivity?: number;
+  onPointerSensitivityChange?: (value: number) => void;
+  upgradeItems?: { id: string; name: string; desc: string; max: number; cost: number }[];
 }
 
 export default function HUD({
@@ -55,6 +58,9 @@ export default function HUD({
   ownedFlashlights = [],
   onEquipFlashlight,
   onToggleFullBright,
+  pointerSensitivity = 1,
+  onPointerSensitivityChange,
+  upgradeItems = [],
 }: HUDProps) {
   const { user } = useAuth();
   const { onlinePlayers, currentServerId } = useSocket();
@@ -137,6 +143,36 @@ export default function HUD({
               {fullBright && <span className="text-primary text-xs">✓</span>}
             </div>
           </button>
+
+          <div className="mt-2 glass rounded-xl px-4 py-3">
+            <p className="text-xs text-muted-foreground mb-2">마우스 감도</p>
+            <input
+              type="range"
+              min="0.5"
+              max="2"
+              step="0.05"
+              value={pointerSensitivity}
+              onChange={(e) => onPointerSensitivityChange?.(Number(e.target.value))}
+              className="w-full"
+            />
+            <p className="mt-1 text-[10px] text-muted-foreground/50">{pointerSensitivity.toFixed(2)}x</p>
+          </div>
+
+          <div className="mt-2 glass rounded-xl px-4 py-3">
+            <p className="text-xs text-muted-foreground mb-2">업그레이드</p>
+            <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+              {upgradeItems.map((item) => (
+                <div key={item.id} className="rounded-lg bg-white/5 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-foreground">{item.name}</p>
+                    <span className="text-[10px] text-yellow-300">{item.cost} DC</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/60">{item.desc}</p>
+                </div>
+              ))}
+              {upgradeItems.length === 0 && <p className="text-[10px] text-muted-foreground/40">사용 가능한 업그레이드가 없습니다</p>}
+            </div>
+          </div>
 
           <AnimatePresence>
             {showPicker && (

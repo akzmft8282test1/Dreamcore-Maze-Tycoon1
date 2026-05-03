@@ -1,5 +1,5 @@
 // 게임 메인 화면: Three.js 미로 + HUD + 채팅
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import MazeEngine, { FLASHLIGHT_PRESETS } from "@/components/game/MazeEngine";
@@ -28,12 +28,20 @@ export default function GamePage() {
   const [roomNumber, setRoomNumber] = useState(1);
   const [flashlightOn, setFlashlightOn] = useState(true);
   const [fullBright, setFullBright] = useState(false);
+  const [pointerSensitivity, setPointerSensitivity] = useState(1);
   const { currentServerId, leaveServer } = useSocket();
   const { user } = useAuth();
   const updateState = useUpdateGameState();
   const equipSkin = useEquipSkin();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const upgradeItems = useMemo(() => [
+    { id: "speed_boost", name: "이동 속도", desc: "빠르게 이동", max: 5, cost: 300 },
+    { id: "vision_enhance", name: "시야 강화", desc: "손전등 범위 증가", max: 5, cost: 400 },
+    { id: "memory_extractor", name: "기억 추출기", desc: "방치 재화 증가", max: 10, cost: 500 },
+    { id: "loot_magnet", name: "잔상 자석", desc: "자동 루팅 강화", max: 5, cost: 700 },
+    { id: "maze_quality", name: "미로 품질", desc: "더 복잡한 미로", max: 3, cost: 1500 },
+  ], []);
 
   const { data: inventory = [] } = useGetUserInventory(user?.id ?? 0, {
     query: { queryKey: getGetUserInventoryQueryKey(user?.id ?? 0), enabled: !!user }
@@ -76,6 +84,7 @@ export default function GamePage() {
             serverId={currentServerId}
             complexity={5}
             equippedFlashlight={equippedFlashlight}
+            pointerSensitivity={pointerSensitivity}
             onPositionChange={handlePositionChange}
             onFlashlightChange={(on) => setFlashlightOn(on && !fullBright)}
           />
@@ -103,6 +112,9 @@ export default function GamePage() {
         ownedFlashlights={ownedFlashlights}
         onEquipFlashlight={handleEquipFlashlight}
         onToggleFullBright={() => setFullBright(v => !v)}
+        pointerSensitivity={pointerSensitivity}
+        onPointerSensitivityChange={setPointerSensitivity}
+        upgradeItems={upgradeItems}
       />
 
       <ChatSystem />

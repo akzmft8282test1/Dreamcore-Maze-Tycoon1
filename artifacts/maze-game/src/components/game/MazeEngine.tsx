@@ -22,6 +22,7 @@ interface MazeEngineProps {
   serverId?: number | null;
   complexity?: number;
   equippedFlashlight?: string | null;
+  pointerSensitivity?: number;
   onPositionChange?: (pos: { x: number; y: number; z: number; mapId: string }) => void;
   onFlashlightChange?: (on: boolean) => void;
 }
@@ -144,7 +145,7 @@ function makeWallTex(size = 128): THREE.DataTexture {
   return tex;
 }
 
-export default function MazeEngine({ serverId, complexity = 5, equippedFlashlight, onPositionChange, onFlashlightChange }: MazeEngineProps) {
+export default function MazeEngine({ serverId, complexity = 5, equippedFlashlight, pointerSensitivity = 1, onPositionChange, onFlashlightChange }: MazeEngineProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -364,8 +365,9 @@ export default function MazeEngine({ serverId, complexity = 5, equippedFlashligh
     const onMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== canvasRef.current) return;
       const pl = playerRef.current;
-      pl.yaw -= e.movementX * SENS;
-      pl.pitch -= e.movementY * SENS;
+      const sens = SENS * pointerSensitivity;
+      pl.yaw -= e.movementX * sens;
+      pl.pitch -= e.movementY * sens;
       pl.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pl.pitch));
     };
 
