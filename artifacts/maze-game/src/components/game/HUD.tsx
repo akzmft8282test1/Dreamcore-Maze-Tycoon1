@@ -211,7 +211,9 @@ export default function HUD({
         <p>클릭 — 포인터 잠금</p>
         <p>V — 뷰 전환</p>
         <p>F — 손전등 켜기/끄기</p>
+        <p>X — 문 상호작용</p>
         <p>Enter — 채팅</p>
+        <p className="text-muted-foreground/30 pt-0.5">분홍 문을 찾아라 — 다른 차원으로</p>
       </motion.div>
     </>
   );
