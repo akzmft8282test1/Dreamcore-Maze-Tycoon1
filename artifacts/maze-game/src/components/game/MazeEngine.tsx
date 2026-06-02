@@ -944,6 +944,7 @@ export default function MazeEngine({
     dimRef.current=1;
     setDimension(1);
     onDimensionChange?.(1);
+    setAmbient(1);
     deadRef.current=false;
     setDead(false);
     gazeRef.current={time:0,spriteIdx:-1};
@@ -1235,7 +1236,8 @@ export default function MazeEngine({
             const pdist=Math.sqrt(pdx*pdx+pdz*pdz);
             if (xKey&&pdist<ball.radius+1.2){
               ball.collected=true; d2.scene.remove(ball.group);
-              inventoryRef.current++; setInventory(inventoryRef.current); continue;
+              inventoryRef.current++; setInventory(inventoryRef.current);
+              playBallCollect(); continue;
             }
             if (pdist<P_RADIUS+ball.radius+0.1&&pdist>0.001){
               const pushStr=4.5;
@@ -1278,6 +1280,7 @@ export default function MazeEngine({
               // 3차원으로 진입
               dimRef.current=3; setDimension(3);
               onDimensionChange?.(3);
+              playPortalEnter(); playDimensionTransition(); setAmbient(3);
               const rebuilt3=buildDim3();
               dim3DataRef.current=rebuilt3;
               pos.x=DIM3_MW*CELL/2; pos.z=DIM3_MH*CELL/2;
@@ -1316,6 +1319,12 @@ export default function MazeEngine({
             ent.sprite.material.opacity=0.88+Math.sin(ent.phase*2.4)*0.08;
           }
 
+          // 엔티티 접근 소리 (2차원)
+          for (const ent of d2.entityGroups) {
+            const edx=pos.x-ent.pos.x, edz=pos.z-ent.pos.z;
+            playEntityApproach(Math.sqrt(edx*edx+edz*edz),2);
+          }
+
           // 눈 응시 감지
           raycaster.setFromCamera(centerNDC,camera);
           const eyeHits=raycaster.intersectObjects(d2.entityGroups.map(e=>e.sprite),false);
@@ -1328,6 +1337,7 @@ export default function MazeEngine({
               if (gazeRef.current.time>=GAZE_DEATH_TIME){
                 deadRef.current=true; setDead(true);
                 gazeRef.current={time:0,spriteIdx:-1}; setGazeProgress(0);
+                playGazeDeath();
                 setTimeout(()=>{resetToDim1();},3000);
               }
             }
@@ -1344,7 +1354,7 @@ export default function MazeEngine({
 
         // 절벽 낙하 → 1차원 복귀
         const outOfBounds=pos.x<-0.4||pos.x>mazeWd+0.4||pos.z<-0.4||pos.z>mazeHt+0.4;
-        if (outOfBounds&&!fallingRef.current&&!deadRef.current){fallingRef.current=true;setFalling(true);}
+        if (outOfBounds&&!fallingRef.current&&!deadRef.current){fallingRef.current=true;setFalling(true);playFalling();}
         if (fallingRef.current){
           fallSpeedRef.current+=22*dt; fallYRef.current+=fallSpeedRef.current*dt;
           if (fallYRef.current>14){resetToDim1();return;}
@@ -1373,6 +1383,12 @@ export default function MazeEngine({
             }
           }
 
+          // 엔티티 접근 소리 (3차원)
+          for (const ent of d3.entityGroups) {
+            const edx=pos.x-ent.pos.x, edz=pos.z-ent.pos.z;
+            playEntityApproach(Math.sqrt(edx*edx+edz*edz),3);
+          }
+
           // 엔티티 응시 사망
           raycaster.setFromCamera(centerNDC,camera);
           const eyeHits3=raycaster.intersectObjects(d3.entityGroups.map(e=>e.sprite),false);
@@ -1385,6 +1401,7 @@ export default function MazeEngine({
               if (gazeRef.current.time>=GAZE_DEATH_TIME){
                 deadRef.current=true; setDead(true);
                 gazeRef.current={time:0,spriteIdx:-1}; setGazeProgress(0);
+                playGazeDeath();
                 setTimeout(()=>{resetToDim1();},3000);
               }
             }
@@ -1535,6 +1552,26 @@ export default function MazeEngine({
           </div>
         </div>
       )}
+
+      {/* 사운드 토글 버튼 — 항상 표시 */}
+      <button
+        className="absolute bottom-4 right-4 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs tracking-wide transition-all hover:scale-105 active:scale-95"
+        style={{
+          background: soundOn ? "rgba(80,40,120,0.7)" : "rgba(40,40,40,0.7)",
+          color: soundOn ? "rgba(220,190,255,0.95)" : "rgba(160,160,160,0.7)",
+          border: `1px solid ${soundOn ? "rgba(180,120,255,0.4)" : "rgba(100,100,100,0.3)"}`,
+          backdropFilter:"blur(6px)",
+        }}
+        onClick={()=>{
+          const next=!soundOn;
+          setSoundOn(next);
+          setSoundEnabled(next);
+          if (next) { resumeAudio(); setAmbient(dimension); }
+        }}
+      >
+        <span style={{fontSize:"14px"}}>{soundOn ? "🔊" : "🔇"}</span>
+        {soundOn ? "사운드 ON" : "사운드 OFF"}
+      </button>
     </div>
   );
 }
