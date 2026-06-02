@@ -1,7 +1,13 @@
-// 드림코어 미로 엔진 v3 — 3차원(학교), 포탈, 5가지 알고리즘, Q키 공 던지기
+// 드림코어 미로 엔진 v3 — 3차원(학교), 포탈, 5가지 알고리즘, Q키 공 던지기, 사운드
 import { useEffect, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
 import { FLASHLIGHT_PRESETS } from "./flashlight-presets";
+import {
+  playFootstep, playPortalEnter, playDimensionTransition,
+  playKeyTurn, playDoorCreak, playBallCollect, playBallThrow,
+  playEntityApproach, playGazeDeath, playFalling,
+  setAmbient, setSoundEnabled, getSoundEnabled, resumeAudio,
+} from "@/utils/SoundSystem";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 interface MazeEngineProps {
@@ -901,6 +907,7 @@ export default function MazeEngine({
   const [inventory,setInventory]=useState(0);
   const [falling,setFalling]=useState(false);
   const [currentAlgo,setCurrentAlgo]=useState('');
+  const [soundOn,setSoundOn]=useState(true);
   const initialAnnouncementSentRef=useRef(false);
 
   const yawRef=useRef(0);
@@ -994,11 +1001,12 @@ export default function MazeEngine({
       initialAnnouncementSentRef.current=true;
     }
 
-    const onClick=()=>{ container.requestPointerLock(); };
+    const onClick=()=>{ container.requestPointerLock(); resumeAudio(); };
     container.addEventListener("click",onClick);
     const onLockChange=()=>{
       const isLocked=document.pointerLockElement===container;
       lockedRef.current=isLocked; setLocked(isLocked);
+      if (isLocked) { resumeAudio(); setAmbient(dimRef.current); }
     };
     document.addEventListener("pointerlockchange",onLockChange);
     document.addEventListener("pointerlockerror",()=>{});
@@ -1065,6 +1073,7 @@ export default function MazeEngine({
         if (!hitsWall(wb,nx,pos.z)) pos.x=nx;
         const nz=pos.z+move.z;
         if (!hitsWall(wb,pos.x,nz)) pos.z=nz;
+        if (!fallingRef.current) playFootstep(curDim as 1|2|3);
       }
       if (moving&&!fallingRef.current) bobRef.current+=8*dt;
       const bobY=moving?Math.sin(bobRef.current)*0.028:0;
@@ -1099,6 +1108,7 @@ export default function MazeEngine({
           doorStateRef.current='unlocking';
           setDoorState('unlocking');
           onDoorZoneChange?.(doorZoneRef.current);
+          playKeyTurn();
         }
 
         const panel=(d1.doorGroup as any)._panel as THREE.Group;
@@ -1106,7 +1116,7 @@ export default function MazeEngine({
         if (dstate==='unlocking') {
           (d1.doorGroup as any)._keyAngle=((d1.doorGroup as any)._keyAngle??0)+dt*1.8;
           if (keyMesh) keyMesh.rotation.z=Math.sin((d1.doorGroup as any)._keyAngle)*0.6;
-          if ((d1.doorGroup as any)._keyAngle>Math.PI){doorStateRef.current='opening';setDoorState('opening');}
+          if ((d1.doorGroup as any)._keyAngle>Math.PI){doorStateRef.current='opening';setDoorState('opening');playDoorCreak();}
         } else if (dstate==='opening') {
           (d1.doorGroup as any)._angle=Math.min((d1.doorGroup as any)._angle+dt*1.5,Math.PI/2);
           panel.rotation.y=-(d1.doorGroup as any)._angle;
@@ -1119,6 +1129,7 @@ export default function MazeEngine({
           if (fwd.dot(toDoor)>0.35) {
             dimRef.current=2; setDimension(2);
             onDimensionChange?.(2);
+            playPortalEnter(); playDimensionTransition(); setAmbient(2);
             setShowDoorHint(false);
             const rebuilt=buildDim2();
             dim2DataRef.current=rebuilt;
@@ -1171,7 +1182,7 @@ export default function MazeEngine({
 
         // 절벽 낙하
         const outOfBounds=pos.x<-0.4||pos.x>mazeWd+0.4||pos.z<-0.4||pos.z>mazeHt+0.4;
-        if (outOfBounds&&!fallingRef.current&&!deadRef.current){fallingRef.current=true;setFalling(true);}
+        if (outOfBounds&&!fallingRef.current&&!deadRef.current){fallingRef.current=true;setFalling(true);playFalling();}
         if (fallingRef.current){
           fallSpeedRef.current+=22*dt;
           fallYRef.current+=fallSpeedRef.current*dt;
@@ -1197,6 +1208,7 @@ export default function MazeEngine({
           if (qKey&&inventoryRef.current>0) {
             inventoryRef.current--;
             setInventory(inventoryRef.current);
+            playBallThrow();
             const throwDir=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
             const radius=0.4;
             const col=BALL_COLORS[Math.floor(Math.random()*BALL_COLORS.length)];
