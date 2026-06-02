@@ -32,6 +32,22 @@ tags:
     description: 방명록
 
 paths:
+
+
+  /skey:
+    get:
+        operationId: getSkey
+        tags: [auth]
+        summary: Skey 발급
+        responses:
+          "200":
+            description: Skey 발급 성공
+            content:
+              application/json:
+                schema:
+                  $ref: "#/components/schemas/AuthResponse"
+
+      
   /healthz:
     get:
       operationId: healthCheck
@@ -43,7 +59,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HealthStatus"
+                $ref: "#//HealthStatus"
 
   # ───────────────── AUTH ─────────────────
   /auth/register:
