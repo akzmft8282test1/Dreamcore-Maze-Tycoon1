@@ -5,7 +5,6 @@ import { motion } from "framer-motion";
 import MazeEngine from "@/components/game/MazeEngine";
 import ChatSystem from "@/components/game/ChatSystem";
 import HUD from "@/components/game/HUD";
-import Minimap from "@/components/game/Minimap";
 import DreamcoreEvents from "@/components/game/DreamcoreEvents";
 import { useSocket } from "@/contexts/SocketContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -49,6 +48,7 @@ export default function GamePage() {
     setInitialPart(Number.isFinite(parsedPart) && parsedPart > 0 ? parsedPart : null);
     setInitialDimension(parsedDimension === 2 ? 2 : 1);
   }, []);
+
   const upgradeItems = useMemo(() => [
     { id: "speed_boost", name: "이동 속도", desc: "빠르게 이동", max: 5, cost: 300 },
     { id: "vision_enhance", name: "시야 강화", desc: "손전등 범위 증가", max: 5, cost: 400 },
@@ -93,33 +93,23 @@ export default function GamePage() {
   return (
     <div className="fixed inset-0 bg-black overflow-hidden" data-testid="game-page">
       <div className="absolute inset-0">
-        {!is2DView && (
-          <MazeEngine
-            serverId={currentServerId}
-            complexity={5}
-            equippedFlashlight={equippedFlashlight}
-            pointerSensitivity={pointerSensitivity}
-            initialPart={initialPart}
-            initialDimension={initialDimension}
-            onDoorZoneChange={(zone) => {
-              setDoorZone(zone);
-              if (zone) toast({ title: "문 위치", description: `${zone}번 구역에 문이 있어요` });
-            }}
-            onDimensionChange={(dim) => setCurrentDimension(dim)}
-            onPositionChange={handlePositionChange}
-            onFlashlightChange={(on) => setFlashlightOn(on && !fullBright)}
-          />
-        )}
-        {is2DView && (
-          <div className="w-full h-full flex items-center justify-center bg-black">
-            <div className="relative" style={{ width: 600, height: 600 }}>
-              <Minimap playerPos={playerPos} mazeSize={20} compact={false} />
-              <p className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-muted-foreground">
-                2D 미로 맵 — V 키로 3D 복귀
-              </p>
-            </div>
-          </div>
-        )}
+        {/* MazeEngine은 항상 마운트 — is2DView 시 내부에서 미니맵 풀스크린 표시 */}
+        <MazeEngine
+          is2DView={is2DView}
+          serverId={currentServerId}
+          complexity={5}
+          equippedFlashlight={equippedFlashlight}
+          pointerSensitivity={pointerSensitivity}
+          initialPart={initialPart}
+          initialDimension={initialDimension}
+          onDoorZoneChange={(zone) => {
+            setDoorZone(zone);
+            if (zone) toast({ title: "문 위치", description: `${zone}번 구역에 문이 있어요` });
+          }}
+          onDimensionChange={(dim) => setCurrentDimension(dim)}
+          onPositionChange={handlePositionChange}
+          onFlashlightChange={(on) => setFlashlightOn(on && !fullBright)}
+        />
       </div>
 
       <HUD
@@ -143,7 +133,6 @@ export default function GamePage() {
         currentDimension={currentDimension}
         playerPos={playerPos}
       />
-      {!is2DView && <Minimap playerPos={playerPos} compact={true} />}
       <DreamcoreEvents />
 
       <motion.div

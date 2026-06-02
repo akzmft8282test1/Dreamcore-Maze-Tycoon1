@@ -11,6 +11,7 @@ import {
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 interface MazeEngineProps {
+  is2DView?: boolean;
   serverId?: number | null;
   complexity?: number;
   equippedFlashlight?: string | null;
@@ -885,6 +886,7 @@ function buildDim3(): Dim3Data {
 
 // ─── 컴포넌트 ─────────────────────────────────────────────────────────────────
 export default function MazeEngine({
+  is2DView=false,
   serverId,
   complexity=5,
   equippedFlashlight,
@@ -897,7 +899,11 @@ export default function MazeEngine({
   onFlashlightChange,
   onDimensionChange,
 }: MazeEngineProps) {
+  const wrapperRef=useRef<HTMLDivElement>(null);
   const containerRef=useRef<HTMLDivElement>(null);
+  const minimapCanvasRef=useRef<HTMLCanvasElement>(null);
+  const is2DViewRef=useRef(false);
+  const mapFrameRef=useRef(0);
   const [locked,setLocked]=useState(false);
   const [dimension,setDimension]=useState<1|2|3>(1);
   const [doorState,setDoorState]=useState<'closed'|'unlocking'|'opening'|'open'>('closed');
@@ -939,6 +945,21 @@ export default function MazeEngine({
   const portalCooldownRef=useRef(0);
 
   sensRef.current=BASE_SENS*pointerSensitivity;
+  is2DViewRef.current=is2DView;
+
+  // 2D뷰 전환 시 캔버스 크기 업데이트
+  useEffect(()=>{
+    is2DViewRef.current=is2DView;
+    const canvas=minimapCanvasRef.current;
+    const wrap=wrapperRef.current;
+    if (!canvas) return;
+    if (is2DView) {
+      canvas.width=wrap?.clientWidth||window.innerWidth;
+      canvas.height=wrap?.clientHeight||window.innerHeight;
+    } else {
+      canvas.width=180; canvas.height=180;
+    }
+  },[is2DView]);
 
   const resetToDim1=useCallback(()=>{
     dimRef.current=1;
@@ -966,8 +987,9 @@ export default function MazeEngine({
   useEffect(()=>{
     const container=containerRef.current;
     if (!container) return;
-    const W=container.clientWidth||window.innerWidth;
-    const H=container.clientHeight||window.innerHeight;
+    const wrap=wrapperRef.current;
+    const W=(wrap?.clientWidth||container.clientWidth)||window.innerWidth;
+    const H=(wrap?.clientHeight||container.clientHeight)||window.innerHeight;
 
     const renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:"high-performance"});
     renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
@@ -1030,9 +1052,13 @@ export default function MazeEngine({
     document.addEventListener("keydown",onKeyDown);
     document.addEventListener("keyup",onKeyUp);
     const onResize=()=>{
-      const rw=container.clientWidth,rh=container.clientHeight;
+      const rw=(wrap?.clientWidth||container.clientWidth)||800;
+      const rh=(wrap?.clientHeight||container.clientHeight)||600;
       camera.aspect=rw/rh; camera.updateProjectionMatrix();
       renderer.setSize(rw,rh);
+      // 2D뷰 캔버스도 리사이즈
+      const mc=minimapCanvasRef.current;
+      if (mc&&is2DViewRef.current&&wrap){mc.width=wrap.clientWidth;mc.height=wrap.clientHeight;}
     };
     window.addEventListener("resize",onResize);
 
@@ -1040,6 +1066,131 @@ export default function MazeEngine({
     const centerNDC=new THREE.Vector2(0,0);
     const clock=new THREE.Clock();
     let t=0,raf: number;
+
+    // ─── 미니맵 그리기 ──────────────────────────────────────────────────────────
+    const drawMinimap=()=>{
+      const canvas=minimapCanvasRef.current;
+      if (!canvas) return;
+      const mctx=canvas.getContext("2d");
+      if (!mctx) return;
+
+      const curDim=dimRef.current;
+      const pos=posRef.current;
+      const yaw=yawRef.current;
+      const cw=canvas.width, ch=canvas.height;
+
+      let walls: WallBox[]=[];
+      let worldW=1,worldH=1;
+      if (curDim===1&&dim1DataRef.current){
+        walls=dim1DataRef.current.wallBoxes;
+        const mwDim=(8+complexity*2)*CELL;
+        worldW=worldH=mwDim;
+      } else if (curDim===2&&dim2DataRef.current){
+        walls=dim2DataRef.current.wallBoxes;
+        worldW=DIM2_MW*CELL; worldH=DIM2_MH*CELL;
+      } else if (curDim===3&&dim3DataRef.current){
+        walls=dim3DataRef.current.wallBoxes;
+        worldW=DIM3_MW*CELL; worldH=DIM3_MH*CELL;
+      }
+
+      const sx=cw/worldW, sz=ch/worldH;
+
+      // 배경
+      mctx.fillStyle=curDim===1?'#0c0918':curDim===2?'#071309':'#080e1a';
+      mctx.fillRect(0,0,cw,ch);
+      // 통로 색
+      mctx.fillStyle=curDim===1?'#1c1630':curDim===2?'#0d2a12':'#0e1a30';
+      mctx.fillRect(0,0,cw,ch);
+
+      // 벽
+      mctx.fillStyle=curDim===1?'#5030a0':curDim===2?'#30a050':'#2850b0';
+      for (const w of walls){
+        mctx.fillRect(
+          w.minX*sx, w.minZ*sz,
+          Math.max(1.5,(w.maxX-w.minX)*sx),
+          Math.max(1.5,(w.maxZ-w.minZ)*sz)
+        );
+      }
+
+      const dotR=Math.max(3,cw/55);
+
+      // ── 차원1 마커 ────
+      if (curDim===1&&dim1DataRef.current){
+        if (dim1DataRef.current.doorWorldPos){
+          const dp=dim1DataRef.current.doorWorldPos;
+          mctx.beginPath();
+          mctx.arc(dp.x*sx,dp.z*sz,dotR*1.5,0,Math.PI*2);
+          mctx.fillStyle='#ff60b0'; mctx.fill();
+          mctx.strokeStyle='#ff1080'; mctx.lineWidth=1.5; mctx.stroke();
+        }
+        for (const ent of dim1DataRef.current.entities){
+          mctx.beginPath();
+          mctx.arc(ent.pos.x*sx,ent.pos.z*sz,dotR,0,Math.PI*2);
+          mctx.fillStyle=ent.type==='orb'?'rgba(255,80,80,0.9)':'rgba(160,0,40,0.85)';
+          mctx.fill();
+        }
+      }
+
+      // ── 차원2 마커 ────
+      if (curDim===2&&dim2DataRef.current){
+        const d2=dim2DataRef.current;
+        for (const portal of d2.portals){
+          mctx.beginPath();
+          mctx.arc(portal.pos.x*sx,portal.pos.z*sz,dotR*1.6,0,Math.PI*2);
+          mctx.fillStyle='rgba(0,240,220,0.8)'; mctx.fill();
+          mctx.strokeStyle='#00ffee'; mctx.lineWidth=1.5; mctx.stroke();
+        }
+        for (const ball of d2.balls){
+          if (ball.collected) continue;
+          mctx.beginPath();
+          mctx.arc(ball.group.position.x*sx,ball.group.position.z*sz,Math.max(2,cw/75),0,Math.PI*2);
+          mctx.fillStyle='rgba(255,165,50,0.7)'; mctx.fill();
+        }
+        for (const ent of d2.entityGroups){
+          mctx.beginPath();
+          mctx.arc(ent.pos.x*sx,ent.pos.z*sz,dotR,0,Math.PI*2);
+          mctx.fillStyle='rgba(255,50,80,0.95)'; mctx.fill();
+        }
+      }
+
+      // ── 차원3 마커 ────
+      if (curDim===3&&dim3DataRef.current){
+        for (const ent of dim3DataRef.current.entityGroups){
+          mctx.beginPath();
+          mctx.arc(ent.pos.x*sx,ent.pos.z*sz,dotR,0,Math.PI*2);
+          mctx.fillStyle=ent.type==='ghost'?'rgba(160,190,255,0.85)':'rgba(190,110,40,0.9)';
+          mctx.fill();
+        }
+      }
+
+      // 플레이어 화살표
+      const px=pos.x*sx, pz=pos.z*sz;
+      const ar=Math.max(6,cw/24);
+      mctx.save();
+      mctx.translate(px,pz);
+      mctx.rotate(-yaw);
+      // 시야 콘
+      mctx.beginPath();
+      mctx.moveTo(0,0);
+      mctx.arc(0,0,ar*2.8,-Math.PI/3.5,Math.PI/3.5);
+      mctx.fillStyle='rgba(255,255,200,0.07)'; mctx.fill();
+      // 화살 몸체
+      mctx.fillStyle='#ffffff';
+      mctx.beginPath();
+      mctx.moveTo(0,-ar);
+      mctx.lineTo(-ar*0.55,ar*0.65);
+      mctx.lineTo(0,ar*0.2);
+      mctx.lineTo(ar*0.55,ar*0.65);
+      mctx.closePath();
+      mctx.fill();
+      mctx.strokeStyle='#88bbff'; mctx.lineWidth=0.8; mctx.stroke();
+      mctx.restore();
+
+      // 테두리
+      mctx.strokeStyle='rgba(139,92,246,0.45)';
+      mctx.lineWidth=is2DViewRef.current?1.5:1;
+      mctx.strokeRect(0,0,cw,ch);
+    };
 
     const animate=()=>{
       raf=requestAnimationFrame(animate);
@@ -1421,7 +1572,12 @@ export default function MazeEngine({
         else onRoomChange?.(Math.floor(pos.x/CELL)*DIM3_MW+Math.floor(pos.z/CELL)+1);
       }
 
-      renderer.render(activeSceneRef.current!,camera);
+      // 미니맵 매 3프레임마다 갱신
+      mapFrameRef.current++;
+      if (mapFrameRef.current%3===0) drawMinimap();
+
+      // 3D 렌더 (2D뷰 모드에서는 건너뜀)
+      if (!is2DViewRef.current) renderer.render(activeSceneRef.current!,camera);
     };
     animate();
 
@@ -1446,112 +1602,164 @@ export default function MazeEngine({
     3:{bg:"rgba(100,140,210,0.35)",text:"rgba(180,210,255,0.9)",border:"rgba(120,160,240,0.3)",label:"◈ 3차원 — 학교"},
   }[dimension];
 
+  const dimLabel={1:"◈ 1차원 — 리미널 미로",2:"◈ 2차원 — 드림코어 백룸",3:"◈ 3차원 — 학교"}[dimension];
+  const mapLegend={
+    1:[{color:"#ff60b0",label:"출구 문"},{color:"rgba(255,80,80,0.9)",label:"엔티티"},{color:"#fff",label:"나 (↑앞)"}],
+    2:[{color:"rgba(0,240,220,0.85)",label:"포탈(3차원)"},{color:"rgba(255,165,50,0.8)",label:"비치볼"},{color:"rgba(255,50,80,0.9)",label:"꽃눈 엔티티"},{color:"#fff",label:"나 (↑앞)"}],
+    3:[{color:"rgba(160,190,255,0.85)",label:"유령 학생"},{color:"rgba(190,110,40,0.9)",label:"관리인"},{color:"#fff",label:"나 (↑앞)"}],
+  }[dimension];
+
   return (
     <div
-      ref={containerRef}
+      ref={wrapperRef}
       data-testid="maze-canvas"
       className="w-full h-full relative select-none"
-      style={{touchAction:"none",cursor:locked?"none":"crosshair"}}
+      style={{touchAction:"none",cursor:locked&&!is2DView?"none":"default",background:"#000"}}
     >
-      {locked&&!dead&&(
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <line x1="11" y1="2"  x2="11" y2="8"  stroke="rgba(255,255,200,0.9)" strokeWidth="1.5" strokeLinecap="round"/>
-            <line x1="11" y1="14" x2="11" y2="20" stroke="rgba(255,255,200,0.9)" strokeWidth="1.5" strokeLinecap="round"/>
-            <line x1="2"  y1="11" x2="8"  y2="11" stroke="rgba(255,255,200,0.9)" strokeWidth="1.5" strokeLinecap="round"/>
-            <line x1="14" y1="11" x2="20" y2="11" stroke="rgba(255,255,200,0.9)" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
+      {/* Three.js 3D 렌더 컨테이너 (2D뷰 시 숨김) */}
+      <div
+        ref={containerRef}
+        className="absolute inset-0"
+        style={{display:is2DView?"none":"block",cursor:locked?"none":"crosshair"}}
+      />
+
+      {/* 미니맵 캔버스 — 3D뷰:우하단 코너, 2D뷰:풀스크린 */}
+      <canvas
+        ref={minimapCanvasRef}
+        width={180}
+        height={180}
+        className={is2DView
+          ? "absolute inset-0 w-full h-full z-10"
+          : "absolute z-10 rounded-lg overflow-hidden"
+        }
+        style={is2DView
+          ? {imageRendering:"pixelated"}
+          : {bottom:"5rem",right:"1rem",width:180,height:180,boxShadow:"0 0 16px rgba(139,92,246,0.5)",borderRadius:"8px"}
+        }
+      />
+
+      {/* 2D 맵 뷰 오버레이 */}
+      {is2DView&&(
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2">
+          <div className="px-4 py-1.5 rounded-xl text-xs tracking-widest"
+            style={{background:"rgba(0,0,0,0.65)",color:dimColors.text,border:`1px solid ${dimColors.border}`,backdropFilter:"blur(6px)"}}>
+            {dimLabel} — 2D 미니맵
+          </div>
+          <div className="flex items-center gap-3 px-4 py-1.5 rounded-xl text-[10px] tracking-wide"
+            style={{background:"rgba(0,0,0,0.55)",backdropFilter:"blur(4px)",border:"1px solid rgba(255,255,255,0.1)"}}>
+            {mapLegend.map(({color,label})=>(
+              <span key={label} className="flex items-center gap-1">
+                <span style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:color,flexShrink:0}}/>
+                <span style={{color:"rgba(255,255,255,0.7)"}}>{label}</span>
+              </span>
+            ))}
+          </div>
+          <div className="text-[9px] tracking-widest" style={{color:"rgba(255,255,255,0.3)"}}>V 키로 3D 복귀</div>
         </div>
       )}
 
-      {!locked&&!dead&&(
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 gap-2">
-          <div className="px-5 py-2.5 rounded-2xl text-sm font-medium tracking-wider"
-            style={{background:"rgba(0,0,0,0.55)",color:"rgba(255,245,180,0.92)",border:"1px solid rgba(255,240,160,0.18)",backdropFilter:"blur(6px)"}}>
-            화면을 클릭하면 마우스가 잠깁니다
+      {/* ── 3D 모드 전용 오버레이 ────────────────────────────────────────────── */}
+      {!is2DView&&(<>
+        {locked&&!dead&&(
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <line x1="11" y1="2"  x2="11" y2="8"  stroke="rgba(255,255,200,0.9)" strokeWidth="1.5" strokeLinecap="round"/>
+              <line x1="11" y1="14" x2="11" y2="20" stroke="rgba(255,255,200,0.9)" strokeWidth="1.5" strokeLinecap="round"/>
+              <line x1="2"  y1="11" x2="8"  y2="11" stroke="rgba(255,255,200,0.9)" strokeWidth="1.5" strokeLinecap="round"/>
+              <line x1="14" y1="11" x2="20" y2="11" stroke="rgba(255,255,200,0.9)" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
           </div>
-          <div className="text-xs" style={{color:"rgba(255,245,180,0.45)"}}>
-            {dimension===1?"WASD 이동 · F 손전등 · X 열쇠":dimension===2?"WASD 이동 · X 공 줍기 · Q 공 던지기":"WASD 이동 · ESC 해제"}
-          </div>
-        </div>
-      )}
+        )}
 
-      {dimension===2&&locked&&!dead&&(
-        <div className="absolute top-4 right-4 pointer-events-none z-20 flex items-center gap-1.5">
-          <div className="px-3 py-1.5 rounded-xl text-xs tracking-wide flex items-center gap-2"
-            style={{background:"rgba(20,60,20,0.55)",color:"rgba(180,255,160,0.95)",border:"1px solid rgba(100,255,100,0.25)",backdropFilter:"blur(4px)"}}>
-            <span style={{fontSize:"14px"}}>🏐</span>
-            <span className="font-bold">{inventory}</span>
-            <span style={{color:"rgba(140,255,140,0.6)"}}>[Q던지기]</span>
+        {!locked&&!dead&&(
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 gap-2">
+            <div className="px-5 py-2.5 rounded-2xl text-sm font-medium tracking-wider"
+              style={{background:"rgba(0,0,0,0.55)",color:"rgba(255,245,180,0.92)",border:"1px solid rgba(255,240,160,0.18)",backdropFilter:"blur(6px)"}}>
+              화면을 클릭하면 마우스가 잠깁니다
+            </div>
+            <div className="text-xs" style={{color:"rgba(255,245,180,0.45)"}}>
+              {dimension===1?"WASD 이동 · F 손전등 · X 열쇠":dimension===2?"WASD 이동 · X 공 줍기 · Q 공 던지기":"WASD 이동 · ESC 해제"}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {locked&&(
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 pointer-events-none z-10">
-          <div className="px-3 py-1 rounded-full text-[10px] tracking-widest"
-            style={{background:dimColors.bg,color:dimColors.text,border:`1px solid ${dimColors.border}`}}>
-            {dimColors.label}
+        {dimension===2&&locked&&!dead&&(
+          <div className="absolute top-4 right-4 pointer-events-none z-20 flex items-center gap-1.5">
+            <div className="px-3 py-1.5 rounded-xl text-xs tracking-wide flex items-center gap-2"
+              style={{background:"rgba(20,60,20,0.55)",color:"rgba(180,255,160,0.95)",border:"1px solid rgba(100,255,100,0.25)",backdropFilter:"blur(4px)"}}>
+              <span style={{fontSize:"14px"}}>🏐</span>
+              <span className="font-bold">{inventory}</span>
+              <span style={{color:"rgba(140,255,140,0.6)"}}>[Q던지기]</span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {dimension===2&&locked&&currentAlgo&&(
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 pointer-events-none z-10">
-          <div className="px-2 py-0.5 rounded text-[9px] tracking-widest"
-            style={{background:"rgba(0,80,30,0.4)",color:"rgba(150,255,150,0.65)",border:"1px solid rgba(100,200,100,0.2)"}}>
-            알고리즘: {currentAlgo}
+        {locked&&(
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 pointer-events-none z-10">
+            <div className="px-3 py-1 rounded-full text-[10px] tracking-widest"
+              style={{background:dimColors.bg,color:dimColors.text,border:`1px solid ${dimColors.border}`}}>
+              {dimColors.label}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {showDoorHint&&locked&&dimension===1&&(
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 pointer-events-none z-20">
-          <div className="px-4 py-2 rounded-xl text-xs tracking-wide animate-pulse"
-            style={{background:"rgba(255,100,180,0.3)",color:"rgba(255,200,230,0.95)",border:"1px solid rgba(255,100,180,0.4)",backdropFilter:"blur(4px)"}}>
-            {doorState==='closed'&&"[ X ] 열쇠를 돌려 문을 여세요"}
-            {doorState==='unlocking'&&"🔑 열쇠가 돌아가고 있습니다..."}
-            {doorState==='opening'&&"삐걱— 문이 열립니다..."}
-            {doorState==='open'&&"✦ 다른 차원이 보입니다 — 들어가세요"}
+        {dimension===2&&locked&&currentAlgo&&(
+          <div className="absolute top-24 left-1/2 -translate-x-1/2 pointer-events-none z-10">
+            <div className="px-2 py-0.5 rounded text-[9px] tracking-widest"
+              style={{background:"rgba(0,80,30,0.4)",color:"rgba(150,255,150,0.65)",border:"1px solid rgba(100,200,100,0.2)"}}>
+              알고리즘: {currentAlgo}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {(dimension===2||dimension===3)&&gazeProgress>0&&!dead&&(
-        <div className="absolute bottom-32 left-1/2 -translate-x-1/2 pointer-events-none z-20 flex flex-col items-center gap-1">
-          <span className="text-[10px] tracking-widest" style={{color:"rgba(255,100,150,0.8)"}}>눈을 마주치고 있습니다</span>
-          <div className="w-48 h-2 rounded-full overflow-hidden" style={{background:"rgba(80,0,30,0.5)"}}>
-            <div className="h-full rounded-full transition-all" style={{
-              width:`${gazeProgress*100}%`,
-              background:"linear-gradient(90deg,#ff4488,#ff0066)",
-              boxShadow:"0 0 8px #ff4488",
-            }}/>
+        {showDoorHint&&locked&&dimension===1&&(
+          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 pointer-events-none z-20">
+            <div className="px-4 py-2 rounded-xl text-xs tracking-wide animate-pulse"
+              style={{background:"rgba(255,100,180,0.3)",color:"rgba(255,200,230,0.95)",border:"1px solid rgba(255,100,180,0.4)",backdropFilter:"blur(4px)"}}>
+              {doorState==='closed'&&"[ X ] 열쇠를 돌려 문을 여세요"}
+              {doorState==='unlocking'&&"🔑 열쇠가 돌아가고 있습니다..."}
+              {doorState==='opening'&&"삐걱— 문이 열립니다..."}
+              {doorState==='open'&&"✦ 다른 차원이 보입니다 — 들어가세요"}
+            </div>
           </div>
-          <span className="text-[9px]" style={{color:"rgba(255,80,120,0.6)"}}>{(gazeProgress*GAZE_DEATH_TIME).toFixed(1)}s / {GAZE_DEATH_TIME}s</span>
-        </div>
-      )}
+        )}
 
-      {falling&&!dead&&(
-        <div className="absolute inset-0 z-40 pointer-events-none"
-          style={{background:"rgba(0,0,0,0.45)",backdropFilter:"blur(1px)"}}>
-          <div className="absolute bottom-1/3 left-1/2 -translate-x-1/2 text-center">
-            <p className="text-2xl font-bold tracking-widest animate-pulse" style={{color:"rgba(255,255,255,0.85)",textShadow:"0 0 20px #fff"}}>
-              ↓ 절벽에서 떨어지고 있습니다...
-            </p>
+        {(dimension===2||dimension===3)&&gazeProgress>0&&!dead&&(
+          <div className="absolute bottom-32 left-1/2 -translate-x-1/2 pointer-events-none z-20 flex flex-col items-center gap-1">
+            <span className="text-[10px] tracking-widest" style={{color:"rgba(255,100,150,0.8)"}}>눈을 마주치고 있습니다</span>
+            <div className="w-48 h-2 rounded-full overflow-hidden" style={{background:"rgba(80,0,30,0.5)"}}>
+              <div className="h-full rounded-full transition-all" style={{
+                width:`${gazeProgress*100}%`,
+                background:"linear-gradient(90deg,#ff4488,#ff0066)",
+                boxShadow:"0 0 8px #ff4488",
+              }}/>
+            </div>
+            <span className="text-[9px]" style={{color:"rgba(255,80,120,0.6)"}}>{(gazeProgress*GAZE_DEATH_TIME).toFixed(1)}s / {GAZE_DEATH_TIME}s</span>
           </div>
-        </div>
-      )}
+        )}
 
-      {dead&&(
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center pointer-events-none"
-          style={{background:"rgba(60,0,20,0.85)",backdropFilter:"blur(2px)"}}>
-          <div className="text-center space-y-3">
-            <p className="text-4xl" style={{color:"#ff3366",textShadow:"0 0 30px #ff0044"}}>👁</p>
-            <p className="text-xl font-bold tracking-widest" style={{color:"rgba(255,100,130,0.95)"}}>눈을 마주쳤습니다</p>
-            <p className="text-sm" style={{color:"rgba(255,160,180,0.7)"}}>1차원으로 돌아갑니다...</p>
+        {falling&&!dead&&(
+          <div className="absolute inset-0 z-40 pointer-events-none"
+            style={{background:"rgba(0,0,0,0.45)",backdropFilter:"blur(1px)"}}>
+            <div className="absolute bottom-1/3 left-1/2 -translate-x-1/2 text-center">
+              <p className="text-2xl font-bold tracking-widest animate-pulse" style={{color:"rgba(255,255,255,0.85)",textShadow:"0 0 20px #fff"}}>
+                ↓ 절벽에서 떨어지고 있습니다...
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {dead&&(
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center pointer-events-none"
+            style={{background:"rgba(60,0,20,0.85)",backdropFilter:"blur(2px)"}}>
+            <div className="text-center space-y-3">
+              <p className="text-4xl" style={{color:"#ff3366",textShadow:"0 0 30px #ff0044"}}>👁</p>
+              <p className="text-xl font-bold tracking-widest" style={{color:"rgba(255,100,130,0.95)"}}>눈을 마주쳤습니다</p>
+              <p className="text-sm" style={{color:"rgba(255,160,180,0.7)"}}>1차원으로 돌아갑니다...</p>
+            </div>
+          </div>
+        )}
+      </>)}
 
       {/* 사운드 토글 버튼 — 항상 표시 */}
       <button
