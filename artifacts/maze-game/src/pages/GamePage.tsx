@@ -31,6 +31,8 @@ export default function GamePage() {
   const [flashlightOn, setFlashlightOn] = useState(true);
   const [fullBright, setFullBright] = useState(false);
   const [pointerSensitivity, setPointerSensitivity] = useState(1);
+  const [doorZone, setDoorZone] = useState<number | null>(null);
+  const [currentDimension, setCurrentDimension] = useState<1 | 2 | 3>(1);
   const { currentServerId, leaveServer } = useSocket();
   const { user } = useAuth();
   const updateState = useUpdateGameState();
@@ -100,8 +102,10 @@ export default function GamePage() {
             initialPart={initialPart}
             initialDimension={initialDimension}
             onDoorZoneChange={(zone) => {
+              setDoorZone(zone);
               if (zone) toast({ title: "문 위치", description: `${zone}번 구역에 문이 있어요` });
             }}
+            onDimensionChange={(dim) => setCurrentDimension(dim)}
             onPositionChange={handlePositionChange}
             onFlashlightChange={(on) => setFlashlightOn(on && !fullBright)}
           />
@@ -134,7 +138,11 @@ export default function GamePage() {
         upgradeItems={upgradeItems}
       />
 
-      <ChatSystem />
+      <ChatSystem
+        doorZone={doorZone}
+        currentDimension={currentDimension}
+        playerPos={playerPos}
+      />
       {!is2DView && <Minimap playerPos={playerPos} compact={true} />}
       <DreamcoreEvents />
 

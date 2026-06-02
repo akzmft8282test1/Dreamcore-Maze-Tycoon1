@@ -1,9 +1,9 @@
-// 드림코어 미로 엔진 v2 — 2차원, 분홍 출구 문, 꽃-눈 엔티티
+// 드림코어 미로 엔진 v3 — 3차원(학교), 포탈, 5가지 알고리즘, Q키 공 던지기
 import { useEffect, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
 import { FLASHLIGHT_PRESETS } from "./flashlight-presets";
 
-// ─── Props ──────────────────────────────────────────────────────────────────
+// ─── Props ───────────────────────────────────────────────────────────────────
 interface MazeEngineProps {
   serverId?: number | null;
   complexity?: number;
@@ -15,50 +15,60 @@ interface MazeEngineProps {
   onRoomChange?: (room: number | null) => void;
   onPositionChange?: (pos: { x: number; y: number; z: number; mapId: string }) => void;
   onFlashlightChange?: (on: boolean) => void;
+  onDimensionChange?: (dim: 1 | 2 | 3) => void;
 }
 
-// ─── 상수 ───────────────────────────────────────────────────────────────────
-const CELL     = 4;
-const H_WALL   = 2.8;
-const T_WALL   = 0.18;
-const P_HEIGHT = 1.55;
-const P_RADIUS = 0.28;
-const SPEED    = 5.5;
+// ─── 상수 ────────────────────────────────────────────────────────────────────
+const CELL      = 4;
+const H_WALL    = 2.8;
+const T_WALL    = 0.18;
+const P_HEIGHT  = 1.55;
+const P_RADIUS  = 0.28;
+const SPEED     = 5.5;
 const BASE_SENS = 0.002;
 const MAX_PITCH = Math.PI / 2 - 0.04;
-const GAZE_DEATH_TIME = 2.25; // 초 (눈 응시 사망 시간)
-const DIM2_MW = 12; // 차원2 미로 너비
-const DIM2_MH = 12; // 차원2 미로 높이
-const BALL_FRICTION = 0.88; // 비치볼 마찰 계수 (프레임당)
-const ENTITY_SPEED  = 0.9;  // 엔티티 이동 속도
+const GAZE_DEATH_TIME = 2.25;
+const DIM2_MW   = 12;
+const DIM2_MH   = 12;
+const DIM3_MW   = 10;
+const DIM3_MH   = 10;
+const BALL_FRICTION = 0.88;
+const ENTITY_SPEED  = 0.9;
+const ENTITY3_SPEED = 0.7;
 
-// ─── 미로 생성 ───────────────────────────────────────────────────────────────
+// ─── 미로 셀 ─────────────────────────────────────────────────────────────────
 interface MazeCell {
   walls: { top: boolean; right: boolean; bottom: boolean; left: boolean };
   visited: boolean;
 }
 
-function generateMaze(w: number, h: number): MazeCell[][] {
-  const grid: MazeCell[][] = Array.from({ length: h }, () =>
+function makeEmptyGrid(w: number, h: number): MazeCell[][] {
+  return Array.from({ length: h }, () =>
     Array.from({ length: w }, () => ({
       walls: { top: true, right: true, bottom: true, left: true },
       visited: false,
     }))
   );
-  const opp: Record<string, string> = { top: "bottom", bottom: "top", left: "right", right: "left" };
-  const DIRS = [[0,-1,"top"],[1,0,"right"],[0,1,"bottom"],[-1,0,"left"]] as [number,number,string][];
+}
+
+const OPP: Record<string, string> = { top: "bottom", bottom: "top", left: "right", right: "left" };
+const DIRS4 = [[0,-1,"top"],[1,0,"right"],[0,1,"bottom"],[-1,0,"left"]] as [number,number,string][];
+
+// ① Recursive Backtracking
+function generateMaze(w: number, h: number): MazeCell[][] {
+  const grid = makeEmptyGrid(w, h);
   const stack: [number,number][] = [];
   let [cx, cz] = [0, 0];
   grid[cz][cx].visited = true;
   stack.push([cx, cz]);
   while (stack.length > 0) {
-    const nb = DIRS
+    const nb = DIRS4
       .map(([dx,dz,d]) => [cx+dx, cz+dz, d] as [number,number,string])
       .filter(([nx,nz]) => nx>=0 && nx<w && nz>=0 && nz<h && !grid[nz as number][nx as number].visited);
     if (nb.length > 0) {
       const [nx,nz,d] = nb[Math.floor(Math.random()*nb.length)];
       grid[cz][cx].walls[d as keyof MazeCell["walls"]] = false;
-      grid[nz][nx].walls[opp[d] as keyof MazeCell["walls"]] = false;
+      grid[nz][nx].walls[OPP[d] as keyof MazeCell["walls"]] = false;
       grid[nz][nx].visited = true;
       stack.push([cx, cz]);
       cx = nx; cz = nz;
@@ -69,18 +79,155 @@ function generateMaze(w: number, h: number): MazeCell[][] {
   return grid;
 }
 
+// ② Prim's Algorithm
+function generateMazePrim(w: number, h: number): MazeCell[][] {
+  const grid = makeEmptyGrid(w, h);
+  interface FrontierItem { x: number; z: number; fromX: number; fromZ: number; dir: string; }
+  const frontier: FrontierItem[] = [];
+  grid[0][0].visited = true;
+  DIRS4.forEach(([dx,dz,d]) => {
+    const nx = dx, nz = dz;
+    if (nx>=0&&nx<w&&nz>=0&&nz<h) frontier.push({x:nx,z:nz,fromX:0,fromZ:0,dir:d});
+  });
+  while (frontier.length > 0) {
+    const idx = Math.floor(Math.random()*frontier.length);
+    const {x,z,fromX,fromZ,dir} = frontier.splice(idx,1)[0];
+    if (!grid[z][x].visited) {
+      grid[z][x].visited = true;
+      grid[fromZ][fromX].walls[dir as keyof MazeCell["walls"]] = false;
+      grid[z][x].walls[OPP[dir] as keyof MazeCell["walls"]] = false;
+      DIRS4.forEach(([dx,dz,d]) => {
+        const nx=x+dx, nz=z+dz;
+        if (nx>=0&&nx<w&&nz>=0&&nz<h&&!grid[nz][nx].visited)
+          frontier.push({x:nx,z:nz,fromX:x,fromZ:z,dir:d});
+      });
+    }
+  }
+  return grid;
+}
+
+// ③ Kruskal's Algorithm
+function generateMazeKruskal(w: number, h: number): MazeCell[][] {
+  const grid = makeEmptyGrid(w, h);
+  const parent = Array.from({length: w*h}, (_,i)=>i);
+  const rank = new Array(w*h).fill(0);
+  const find = (x: number): number => parent[x]===x?x:(parent[x]=find(parent[x]));
+  const union = (a: number, b: number) => {
+    a=find(a); b=find(b);
+    if (a===b) return false;
+    if (rank[a]<rank[b]) { const t=a; a=b; b=t; }
+    parent[b]=a;
+    if (rank[a]===rank[b]) rank[a]++;
+    return true;
+  };
+  const edges: [number,number,number,number,string][] = [];
+  for (let z=0;z<h;z++) for (let x=0;x<w;x++) {
+    if (x+1<w) edges.push([x,z,x+1,z,"right"]);
+    if (z+1<h) edges.push([x,z,x,z+1,"bottom"]);
+  }
+  for (let i=edges.length-1;i>0;i--) {
+    const j=Math.floor(Math.random()*(i+1));
+    [edges[i],edges[j]]=[edges[j],edges[i]];
+  }
+  for (const [x1,z1,x2,z2,dir] of edges) {
+    if (union(z1*w+x1, z2*w+x2)) {
+      grid[z1][x1].walls[dir as keyof MazeCell["walls"]] = false;
+      grid[z2][x2].walls[OPP[dir] as keyof MazeCell["walls"]] = false;
+      grid[z1][x1].visited = true;
+      grid[z2][x2].visited = true;
+    }
+  }
+  return grid;
+}
+
+// ④ Hunt-and-Kill
+function generateMazeHuntKill(w: number, h: number): MazeCell[][] {
+  const grid = makeEmptyGrid(w, h);
+  let cx=0, cz=0;
+  grid[cz][cx].visited = true;
+  let hunting = false;
+  outer: while (true) {
+    if (!hunting) {
+      const nb = DIRS4
+        .map(([dx,dz,d])=>[cx+dx,cz+dz,d] as [number,number,string])
+        .filter(([nx,nz])=>nx>=0&&nx<w&&nz>=0&&nz<h&&!grid[nz as number][nx as number].visited);
+      if (nb.length > 0) {
+        const [nx,nz,d] = nb[Math.floor(Math.random()*nb.length)];
+        grid[cz][cx].walls[d as keyof MazeCell["walls"]] = false;
+        grid[nz][nx].walls[OPP[d] as keyof MazeCell["walls"]] = false;
+        grid[nz][nx].visited = true;
+        cx=nx; cz=nz;
+      } else {
+        hunting = true;
+      }
+    }
+    if (hunting) {
+      for (let hz=0; hz<h; hz++) {
+        for (let hx=0; hx<w; hx++) {
+          if (!grid[hz][hx].visited) {
+            const vn = DIRS4
+              .map(([dx,dz,d])=>[hx+dx,hz+dz,d] as [number,number,string])
+              .filter(([nx,nz])=>nx>=0&&nx<w&&nz>=0&&nz<h&&grid[nz as number][nx as number].visited);
+            if (vn.length > 0) {
+              const [nx,nz,d] = vn[Math.floor(Math.random()*vn.length)];
+              grid[hz][hx].walls[OPP[d] as keyof MazeCell["walls"]] = false;
+              grid[nz][nx].walls[d as keyof MazeCell["walls"]] = false;
+              grid[hz][hx].visited = true;
+              cx=hx; cz=hz; hunting=false;
+              continue outer;
+            }
+          }
+        }
+      }
+      break;
+    }
+  }
+  return grid;
+}
+
+// ⑤ Sidewinder
+function generateMazeSidewinder(w: number, h: number): MazeCell[][] {
+  const grid = makeEmptyGrid(w, h);
+  for (let z=0; z<h; z++) {
+    let runStart = 0;
+    for (let x=0; x<w; x++) {
+      grid[z][x].visited = true;
+      const atE = x+1>=w, atN = z===0;
+      const close = atE || (!atN && Math.random()<0.5);
+      if (close) {
+        if (!atN) {
+          const m = runStart + Math.floor(Math.random()*(x-runStart+1));
+          grid[z][m].walls.top = false;
+          grid[z-1][m].walls.bottom = false;
+        }
+        runStart = x+1;
+      } else {
+        grid[z][x].walls.right = false;
+        grid[z][x+1].walls.left = false;
+      }
+    }
+  }
+  return grid;
+}
+
+// 랜덤 알고리즘 선택 (들어갈 때마다)
+function generateMazeRandom(w: number, h: number): MazeCell[][] {
+  const fns = [generateMaze, generateMazePrim, generateMazeKruskal, generateMazeHuntKill, generateMazeSidewinder];
+  return fns[Math.floor(Math.random()*fns.length)](w, h);
+}
+
+// ─── 벽 충돌 박스 ─────────────────────────────────────────────────────────────
 interface WallBox { minX: number; maxX: number; minZ: number; maxZ: number; }
 
 function buildWallBoxes(maze: MazeCell[][], mw: number, mh: number): WallBox[] {
   const boxes: WallBox[] = [];
   const t = T_WALL / 2;
-  for (let z = 0; z < mh; z++) for (let x = 0; x < mw; x++) {
-    const cell = maze[z][x];
-    const wx = x * CELL, wz = z * CELL;
-    if (cell.walls.top)    boxes.push({ minX: wx-t, maxX: wx+CELL+t, minZ: wz-t,      maxZ: wz+t });
-    if (cell.walls.left)   boxes.push({ minX: wx-t, maxX: wx+t,      minZ: wz-t,      maxZ: wz+CELL+t });
-    if (z===mh-1 && cell.walls.bottom) boxes.push({ minX: wx-t, maxX: wx+CELL+t, minZ: wz+CELL-t, maxZ: wz+CELL+t });
-    if (x===mw-1 && cell.walls.right)  boxes.push({ minX: wx+CELL-t, maxX: wx+CELL+t, minZ: wz-t,      maxZ: wz+CELL+t });
+  for (let z=0;z<mh;z++) for (let x=0;x<mw;x++) {
+    const cell=maze[z][x]; const wx=x*CELL, wz=z*CELL;
+    if (cell.walls.top)    boxes.push({minX:wx-t,maxX:wx+CELL+t,minZ:wz-t,      maxZ:wz+t});
+    if (cell.walls.left)   boxes.push({minX:wx-t,maxX:wx+t,      minZ:wz-t,      maxZ:wz+CELL+t});
+    if (z===mh-1&&cell.walls.bottom) boxes.push({minX:wx-t,maxX:wx+CELL+t,minZ:wz+CELL-t,maxZ:wz+CELL+t});
+    if (x===mw-1&&cell.walls.right)  boxes.push({minX:wx+CELL-t,maxX:wx+CELL+t,minZ:wz-t,      maxZ:wz+CELL+t});
   }
   return boxes;
 }
@@ -92,119 +239,165 @@ function hitsWall(boxes: WallBox[], px: number, pz: number): boolean {
   return false;
 }
 
-// ─── 텍스처 ──────────────────────────────────────────────────────────────────
-function makeDataTex(fn: (x: number, y: number, s: number) => [number,number,number], size = 128): THREE.DataTexture {
-  const data = new Uint8Array(size * size * 4);
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const i = (y*size+x)*4;
-    const [r,g,b] = fn(x,y,size);
+// ─── 텍스처 ───────────────────────────────────────────────────────────────────
+function makeDataTex(fn: (x: number, y: number, s: number) => [number,number,number], size=128): THREE.DataTexture {
+  const data = new Uint8Array(size*size*4);
+  for (let y=0;y<size;y++) for (let x=0;x<size;x++) {
+    const i=(y*size+x)*4;
+    const [r,g,b]=fn(x,y,size);
     data[i]=r; data[i+1]=g; data[i+2]=b; data[i+3]=255;
   }
-  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.needsUpdate = true;
+  const tex = new THREE.DataTexture(data,size,size,THREE.RGBAFormat);
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping; tex.needsUpdate=true;
   return tex;
 }
 
 function makeWallTex(): THREE.DataTexture {
   return makeDataTex((x,y,s) => {
-    const stripe = Math.floor(y/(s/8))%2===0;
-    const n = ((Math.sin(x*0.4+y*0.3)*0.5+0.5)*18)|0;
-    return stripe ? [180+n,168+n,100+n] : [165+n,155+n,88+n];
+    const stripe=Math.floor(y/(s/8))%2===0;
+    const n=((Math.sin(x*0.4+y*0.3)*0.5+0.5)*18)|0;
+    return stripe?[180+n,168+n,100+n]:[165+n,155+n,88+n];
   });
 }
 
 function makeCheckerTex(dark: number, light: number): THREE.DataTexture {
-  const dc = [(dark>>16)&0xff,(dark>>8)&0xff,dark&0xff];
-  const lc = [(light>>16)&0xff,(light>>8)&0xff,light&0xff];
+  const dc=[(dark>>16)&0xff,(dark>>8)&0xff,dark&0xff];
+  const lc=[(light>>16)&0xff,(light>>8)&0xff,light&0xff];
   return makeDataTex((x,y,s) => {
-    const c = (Math.floor(x/(s/8))+Math.floor(y/(s/8)))%2===0 ? dc : lc;
+    const c=(Math.floor(x/(s/8))+Math.floor(y/(s/8)))%2===0?dc:lc;
     return [c[0],c[1],c[2]];
   });
 }
 
-function makeGrassTex(): THREE.DataTexture {
-  return makeDataTex((x,y,s) => {
-    const n = ((Math.sin(x*0.7+y*0.4)*0.5+0.5)*28)|0;
-    const v = ((Math.cos(x*0.3+y*0.9)*0.5+0.5)*18)|0;
-    return [28+n, 126+v, 36+n];
-  });
-}
-
-function makeCloudSkyTex(): THREE.DataTexture {
+// 거칠거칠한 잔디 텍스처 (더 복잡한 패턴)
+function makeRoughGrassTex(): THREE.DataTexture {
   const SIZE = 256;
-  const data = new Uint8Array(SIZE * SIZE * 4);
-  for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-      const i = (y * SIZE + x) * 4;
-      const ty = y / SIZE;
-      const r = Math.round(100 + ty * 55);
-      const g = Math.round(170 + ty * 50);
-      const b = 255;
-      const cx = x / SIZE, cy = y / SIZE;
-      const c1 = Math.max(0, 1 - Math.sqrt(Math.pow((cx-0.18)*2.8, 2) + Math.pow((cy-0.25)*5.5, 2)));
-      const c2 = Math.max(0, 1 - Math.sqrt(Math.pow((cx-0.55)*3.2, 2) + Math.pow((cy-0.18)*6.0, 2)));
-      const c3 = Math.max(0, 1 - Math.sqrt(Math.pow((cx-0.78)*2.5, 2) + Math.pow((cy-0.62)*5.8, 2)));
-      const c4 = Math.max(0, 1 - Math.sqrt(Math.pow((cx-0.35)*2.2, 2) + Math.pow((cy-0.72)*6.5, 2)));
-      const cloud = Math.min(1, (c1 + c2 + c3 + c4) * 1.1);
-      data[i]   = Math.min(255, Math.round(r + cloud * (255 - r)));
-      data[i+1] = Math.min(255, Math.round(g + cloud * (255 - g)));
-      data[i+2] = Math.min(255, Math.round(b + cloud * (255 - b)));
-      data[i+3] = 255;
-    }
+  const data = new Uint8Array(SIZE*SIZE*4);
+  for (let y=0;y<SIZE;y++) for (let x=0;x<SIZE;x++) {
+    const i=(y*SIZE+x)*4;
+    const nx=x/SIZE, ny=y/SIZE;
+    // 다층 노이즈
+    const n1 = Math.sin(nx*18.3+ny*7.1)*Math.cos(ny*13.7+nx*5.9);
+    const n2 = Math.sin(nx*31.1+ny*22.4)*0.5;
+    const n3 = Math.cos(nx*9.7+ny*41.3)*0.3;
+    const nval = (n1+n2+n3)*0.5+0.5;
+    // 잔디 줄기 패턴
+    const blade = Math.abs(Math.sin(nx*64)*Math.sin(ny*64+nx*8));
+    const patch = Math.floor(nx*12)*Math.floor(ny*12)%3;
+    const base = patch===0?52:patch===1?60:44;
+    const r = Math.round(base*0.35 + nval*12 + blade*6);
+    const g = Math.round(base + nval*28 + blade*14);
+    const b = Math.round(base*0.3 + nval*8);
+    data[i]=Math.min(255,r);
+    data[i+1]=Math.min(255,g);
+    data[i+2]=Math.min(255,b);
+    data[i+3]=255;
   }
-  const tex = new THREE.DataTexture(data, SIZE, SIZE, THREE.RGBAFormat);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.needsUpdate = true;
+  const tex = new THREE.DataTexture(data,SIZE,SIZE,THREE.RGBAFormat);
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping; tex.needsUpdate=true;
   return tex;
 }
 
-function makeEntitySpriteTexture(): THREE.Texture {
-  const tex = new THREE.TextureLoader().load("/entity-flower.png");
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
+function makeCloudSkyTex(): THREE.DataTexture {
+  const SIZE=256;
+  const data=new Uint8Array(SIZE*SIZE*4);
+  for (let y=0;y<SIZE;y++) {
+    for (let x=0;x<SIZE;x++) {
+      const i=(y*SIZE+x)*4;
+      const ty=y/SIZE;
+      const r=Math.round(100+ty*55),g=Math.round(170+ty*50),b=255;
+      const cx=x/SIZE,cy=y/SIZE;
+      const c1=Math.max(0,1-Math.sqrt(Math.pow((cx-0.18)*2.8,2)+Math.pow((cy-0.25)*5.5,2)));
+      const c2=Math.max(0,1-Math.sqrt(Math.pow((cx-0.55)*3.2,2)+Math.pow((cy-0.18)*6.0,2)));
+      const c3=Math.max(0,1-Math.sqrt(Math.pow((cx-0.78)*2.5,2)+Math.pow((cy-0.62)*5.8,2)));
+      const c4=Math.max(0,1-Math.sqrt(Math.pow((cx-0.35)*2.2,2)+Math.pow((cy-0.72)*6.5,2)));
+      const cloud=Math.min(1,(c1+c2+c3+c4)*1.1);
+      data[i]=Math.min(255,Math.round(r+cloud*(255-r)));
+      data[i+1]=Math.min(255,Math.round(g+cloud*(255-g)));
+      data[i+2]=Math.min(255,Math.round(b+cloud*(255-b)));
+      data[i+3]=255;
+    }
+  }
+  const tex=new THREE.DataTexture(data,SIZE,SIZE,THREE.RGBAFormat);
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping; tex.needsUpdate=true;
   return tex;
 }
 
 function makeWallSkyTex(): THREE.DataTexture {
-  return makeDataTex((x, y, s) => {
-    const ty = y / s;
-    const rx = x / s;
-    const sky = 0.62 + Math.sin(rx * 12 + ty * 3) * 0.05;
-    const cloud = Math.max(0, 1 - Math.abs(rx - 0.45) * 4.2) * Math.max(0, 1 - Math.abs(ty - 0.35) * 5.5);
-    const cloud2 = Math.max(0, 1 - Math.abs(rx - 0.7) * 5.1) * Math.max(0, 1 - Math.abs(ty - 0.62) * 4.8);
-    const mix = Math.min(1, cloud + cloud2 * 0.8);
-    return [
-      Math.round(110 + sky * 50 + mix * 90),
-      Math.round(170 + sky * 35 + mix * 55),
-      Math.round(255),
-    ];
+  return makeDataTex((x,y,s)=>{
+    const ty=y/s,rx=x/s;
+    const sky=0.62+Math.sin(rx*12+ty*3)*0.05;
+    const cloud=Math.max(0,1-Math.abs(rx-0.45)*4.2)*Math.max(0,1-Math.abs(ty-0.35)*5.5);
+    const cloud2=Math.max(0,1-Math.abs(rx-0.7)*5.1)*Math.max(0,1-Math.abs(ty-0.62)*4.8);
+    const mix=Math.min(1,cloud+cloud2*0.8);
+    return [Math.round(110+sky*50+mix*90),Math.round(170+sky*35+mix*55),255];
   });
 }
 
 function makeCeilingTex(): THREE.DataTexture {
-  return makeDataTex((x, y, s) => {
-    const nx = x / s;
-    const ny = y / s;
-    const seam = Math.max(0, 1 - Math.abs(ny - 0.5) * 8);
-    const panel = ((Math.floor(nx * 8) + Math.floor(ny * 4)) % 2 === 0) ? 1 : 0;
-    const base = panel ? 18 : 12;
-    const glow = seam * 12;
-    return [base + glow, base + glow, base + glow + 4];
+  return makeDataTex((x,y,s)=>{
+    const nx=x/s,ny=y/s;
+    const seam=Math.max(0,1-Math.abs(ny-0.5)*8);
+    const panel=((Math.floor(nx*8)+Math.floor(ny*4))%2===0)?1:0;
+    const base=panel?18:12;
+    const glow=seam*12;
+    return [base+glow,base+glow,base+glow+4];
   });
 }
 
 function makeWallFrameTex(): THREE.DataTexture {
-  return makeDataTex((x, y, s) => {
-    const nx = x / s;
-    const ny = y / s;
-    const seam = Math.max(0, 1 - Math.abs(nx - 0.5) * 6);
-    const tint = 30 + Math.round(seam * 8 + (1 - ny) * 4);
-    return [tint, tint + 1, tint + 6];
+  return makeDataTex((x,y,s)=>{
+    const nx=x/s,ny=y/s;
+    const seam=Math.max(0,1-Math.abs(nx-0.5)*6);
+    const tint=30+Math.round(seam*8+(1-ny)*4);
+    return [tint,tint+1,tint+6];
   });
 }
 
-// ─── 차원1 씬 빌드 ──────────────────────────────────────────────────────────
+// 학교 타일 바닥 텍스처
+function makeSchoolTileTex(): THREE.DataTexture {
+  return makeDataTex((x,y,s)=>{
+    const gx=Math.floor(x/(s/8)), gy=Math.floor(y/(s/8));
+    const isGap = (x%(s/8)<2 || y%(s/8)<2);
+    if (isGap) return [180,185,180];
+    const tile=(gx+gy)%2===0;
+    const n=((Math.sin(x*0.6+y*0.7)*0.5+0.5)*12)|0;
+    return tile?[210+n,215+n,200+n]:[185+n,200+n,185+n];
+  });
+}
+
+// 학교 벽 텍스처 (흰색 + 로커 느낌)
+function makeSchoolWallTex(): THREE.DataTexture {
+  return makeDataTex((x,y,s)=>{
+    const nx=x/s,ny=y/s;
+    const locker=Math.floor(nx*6);
+    const gap=Math.abs((nx*6)-locker-0.5)>0.44;
+    const hline=(ny>0.58&&ny<0.62);
+    if (gap||hline) return [160,162,165];
+    const upper=ny<0.6;
+    const base=upper?238:220;
+    const n=((Math.sin(x*1.1+y*0.9)*0.5+0.5)*8)|0;
+    return upper?[base+n,base+n,base+n-5]:[base-10+n,base-8+n,base-15+n];
+  });
+}
+
+// 엔티티 스프라이트 텍스처 로더
+function makeEntitySpriteTexture(): THREE.Texture {
+  const tex=new THREE.TextureLoader().load("/entity-flower.png");
+  tex.colorSpace=THREE.SRGBColorSpace; tex.needsUpdate=true;
+  return tex;
+}
+
+// ─── 차원1 씬 데이터 타입 ────────────────────────────────────────────────────
+interface EntityData {
+  group: THREE.Group;
+  mesh: THREE.Object3D;
+  pos: THREE.Vector3;
+  vel: THREE.Vector3;
+  phase: number;
+  type: string;
+}
+
 interface Dim1Data {
   scene: THREE.Scene;
   wallBoxes: WallBox[];
@@ -212,192 +405,183 @@ interface Dim1Data {
   doorWorldPos: THREE.Vector3 | null;
   doorNormal: THREE.Vector3 | null;
   doorZone?: number | null;
+  entities: EntityData[];
+  pointLights: THREE.PointLight[];
 }
 
+// ─── 차원1 씬 빌드 ────────────────────────────────────────────────────────────
 function buildDim1(complexity: number, equippedFlashlight: string | null): Dim1Data & { flashlight: THREE.SpotLight; ambientLight: THREE.AmbientLight } {
-  const mw = 8 + complexity * 2;
-  const mh = 8 + complexity * 2;
-  const maze = generateMaze(mw, mh);
-  const wallBoxes = buildWallBoxes(maze, mw, mh);
-  const TW = mw * CELL, TH = mh * CELL;
+  const mw=8+complexity*2, mh=8+complexity*2;
+  const maze=generateMaze(mw, mh);
+  const wallBoxes=buildWallBoxes(maze, mw, mh);
+  const TW=mw*CELL, TH=mh*CELL;
 
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xc8b87a);
-  scene.fog = new THREE.FogExp2(0xc0aa62, 0.052);
+  const scene=new THREE.Scene();
+  scene.background=new THREE.Color(0xc8b87a);
+  scene.fog=new THREE.FogExp2(0xc0aa62, 0.052);
 
-  // 바닥/천장
-  const floorTex = makeCheckerTex(0x8b7355, 0x9e8462); floorTex.repeat.set(TW/2, TH/2);
-  const ceilTex  = makeCheckerTex(0xb0a070, 0xbfaa7a); ceilTex.repeat.set(TW/1.5, TH/1.5);
-  const wallTex  = makeWallTex(); wallTex.repeat.set(1.5, 0.8);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(TW+4,TH+4), new THREE.MeshLambertMaterial({ map: floorTex }));
-  floor.rotation.x = -Math.PI/2; floor.position.set(TW/2,0,TH/2); scene.add(floor);
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(TW+4,TH+4), new THREE.MeshLambertMaterial({ map: ceilTex }));
-  ceil.rotation.x = Math.PI/2; ceil.position.set(TW/2,H_WALL,TH/2); scene.add(ceil);
+  const floorTex=makeCheckerTex(0x8b7355,0x9e8462); floorTex.repeat.set(TW/2,TH/2);
+  const ceilTex=makeCheckerTex(0xb0a070,0xbfaa7a); ceilTex.repeat.set(TW/1.5,TH/1.5);
+  const wallTex=makeWallTex(); wallTex.repeat.set(1.5,0.8);
 
-  // 벽
-  const wallMat = new THREE.MeshLambertMaterial({ map: wallTex });
-  const wallGeoH = new THREE.BoxGeometry(CELL+T_WALL, H_WALL, T_WALL);
-  const wallGeoV = new THREE.BoxGeometry(T_WALL, H_WALL, CELL+T_WALL);
-  const mH: THREE.Matrix4[] = [], mV: THREE.Matrix4[] = [];
-  const m4 = new THREE.Matrix4();
-  for (let z = 0; z < mh; z++) for (let x = 0; x < mw; x++) {
-    const cell = maze[z][x]; const wx = x*CELL, wz = z*CELL;
-    if (cell.walls.top)   mH.push(m4.clone().makeTranslation(wx+CELL/2, H_WALL/2, wz));
-    if (cell.walls.left)  mV.push(m4.clone().makeTranslation(wx, H_WALL/2, wz+CELL/2));
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(TW+4,TH+4),new THREE.MeshLambertMaterial({map:floorTex}));
+  floor.rotation.x=-Math.PI/2; floor.position.set(TW/2,0,TH/2); scene.add(floor);
+  const ceil=new THREE.Mesh(new THREE.PlaneGeometry(TW+4,TH+4),new THREE.MeshLambertMaterial({map:ceilTex}));
+  ceil.rotation.x=Math.PI/2; ceil.position.set(TW/2,H_WALL,TH/2); scene.add(ceil);
+
+  const wallMat=new THREE.MeshLambertMaterial({map:wallTex});
+  const wallGeoH=new THREE.BoxGeometry(CELL+T_WALL,H_WALL,T_WALL);
+  const wallGeoV=new THREE.BoxGeometry(T_WALL,H_WALL,CELL+T_WALL);
+  const mH: THREE.Matrix4[]=[],mV: THREE.Matrix4[]=[];
+  const m4=new THREE.Matrix4();
+  for (let z=0;z<mh;z++) for (let x=0;x<mw;x++) {
+    const cell=maze[z][x]; const wx=x*CELL,wz=z*CELL;
+    if (cell.walls.top)   mH.push(m4.clone().makeTranslation(wx+CELL/2,H_WALL/2,wz));
+    if (cell.walls.left)  mV.push(m4.clone().makeTranslation(wx,H_WALL/2,wz+CELL/2));
     if (z===mh-1&&cell.walls.bottom) mH.push(m4.clone().makeTranslation(wx+CELL/2,H_WALL/2,wz+CELL));
     if (x===mw-1&&cell.walls.right)  mV.push(m4.clone().makeTranslation(wx+CELL,H_WALL/2,wz+CELL/2));
   }
-  if (mH.length>0){ const im=new THREE.InstancedMesh(wallGeoH,wallMat,mH.length); mH.forEach((m,i)=>im.setMatrixAt(i,m)); im.instanceMatrix.needsUpdate=true; scene.add(im); }
-  if (mV.length>0){ const im=new THREE.InstancedMesh(wallGeoV,wallMat,mV.length); mV.forEach((m,i)=>im.setMatrixAt(i,m)); im.instanceMatrix.needsUpdate=true; scene.add(im); }
+  if (mH.length>0){const im=new THREE.InstancedMesh(wallGeoH,wallMat,mH.length);mH.forEach((m,i)=>im.setMatrixAt(i,m));im.instanceMatrix.needsUpdate=true;scene.add(im);}
+  if (mV.length>0){const im=new THREE.InstancedMesh(wallGeoV,wallMat,mV.length);mV.forEach((m,i)=>im.setMatrixAt(i,m));im.instanceMatrix.needsUpdate=true;scene.add(im);}
 
-  // 조명
-  const ambientLight = new THREE.AmbientLight(0xd4c47a, 0.44);
+  const ambientLight=new THREE.AmbientLight(0xd4c47a,0.44);
   scene.add(ambientLight);
-  for (let z = 0; z < mh; z+=2) for (let x = 0; x < mw; x+=2) {
-    const pl = new THREE.PointLight(0xf5e8a0,1.0 + Math.random() * 0.9,CELL*4,1.8);
-    pl.position.set(x*CELL+CELL/2, H_WALL-0.1, z*CELL+CELL/2);
-    pl.userData.baseIntensity = pl.intensity;
-    pl.userData.phase = Math.random() * Math.PI * 2;
+  const pointLights: THREE.PointLight[]=[];
+  for (let z=0;z<mh;z+=2) for (let x=0;x<mw;x+=2) {
+    const pl=new THREE.PointLight(0xf5e8a0,1.0+Math.random()*0.9,CELL*4,1.8);
+    pl.position.set(x*CELL+CELL/2,H_WALL-0.1,z*CELL+CELL/2);
+    pl.userData.baseIntensity=pl.intensity;
+    pl.userData.phase=Math.random()*Math.PI*2;
+    pointLights.push(pl);
     scene.add(pl);
   }
 
-  // 손전등
-  const preset = FLASHLIGHT_PRESETS[equippedFlashlight ?? "default"] ?? FLASHLIGHT_PRESETS.default;
-  const flashlight = new THREE.SpotLight(preset.color, preset.intensity, preset.distance, preset.angle, preset.penumbra, 1.2);
-  flashlight.userData.baseIntensity = preset.intensity;
+  const preset=FLASHLIGHT_PRESETS[equippedFlashlight??"default"]??FLASHLIGHT_PRESETS.default;
+  const flashlight=new THREE.SpotLight(preset.color,preset.intensity,preset.distance,preset.angle,preset.penumbra,1.2);
+  flashlight.userData.baseIntensity=preset.intensity;
   scene.add(flashlight); scene.add(flashlight.target);
 
-  // ── 분홍 출구 문 ──────────────────────────────────────────────────────────
-  let doorGroup: THREE.Group | null = null;
-  let doorWorldPos: THREE.Vector3 | null = null;
-  let doorNormal: THREE.Vector3 | null = null;
-  let doorZone: number | null = null;
+  // ── 분홍 출구 문 ────────────────────────────────────────────────────────────
+  let doorGroup: THREE.Group|null=null;
+  let doorWorldPos: THREE.Vector3|null=null;
+  let doorNormal: THREE.Vector3|null=null;
+  let doorZone: number|null=null;
 
-  // 5% 확률로 문 생성 (dev: 강제 true)
-  if (Math.random() < 0.05 || true) {
-    // 실제 내부 벽(wall === true)에서 후보 선택
-    // 방향 'h' = cell의 top 벽(수평, Z 축 방향으로 면), 'v' = cell의 right 벽(수직, X 축 방향으로 면)
-    const candidates: { wallX: number; wallZ: number; dir: 'h'|'v' }[] = [];
-    for (let z = 1; z < mh - 1; z++) {
-      for (let x = 1; x < mw - 2; x++) {
-        if (maze[z][x].walls.top)   candidates.push({ wallX: x, wallZ: z, dir: 'h' });
-        if (maze[z][x].walls.right) candidates.push({ wallX: x, wallZ: z, dir: 'v' });
-      }
-    }
+  const candidates:{wallX:number;wallZ:number;dir:'h'|'v'}[]=[];
+  for (let z=1;z<mh-1;z++) for (let x=1;x<mw-2;x++) {
+    if (maze[z][x].walls.top)   candidates.push({wallX:x,wallZ:z,dir:'h'});
+    if (maze[z][x].walls.right) candidates.push({wallX:x,wallZ:z,dir:'v'});
+  }
+  if (candidates.length>0) {
+    const pick=candidates[Math.floor(Math.random()*candidates.length)];
+    const wx=pick.dir==='h'?pick.wallX*CELL+CELL/2:(pick.wallX+1)*CELL;
+    const wz=pick.dir==='h'?pick.wallZ*CELL:pick.wallZ*CELL+CELL/2;
+    doorZone=pick.wallZ*mw+pick.wallX+1;
 
-    if (candidates.length > 0) {
-      const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const DW=1.2,DH=2.4,DTH=0.10,FRAME=0.13;
+    const frameMat=new THREE.MeshLambertMaterial({color:0xff8fb0,emissive:0x220010,emissiveIntensity:0.2});
+    const bodyMat=new THREE.MeshLambertMaterial({color:0xff4d9e,emissive:0x2a0018,emissiveIntensity:0.18});
+    const trimMat=new THREE.MeshLambertMaterial({color:0xffbcd6});
+    const goldMat=new THREE.MeshLambertMaterial({color:0xffd700,emissive:0x996600,emissiveIntensity:0.4});
 
-      // 벽 중앙 월드 좌표
-      // top 벽: x*CELL+CELL/2, z*CELL
-      // right 벽: (x+1)*CELL, z*CELL+CELL/2
-      const wx = pick.dir === 'h'
-        ? pick.wallX * CELL + CELL / 2
-        : (pick.wallX + 1) * CELL;
-      const wz = pick.dir === 'h'
-        ? pick.wallZ * CELL
-        : pick.wallZ * CELL + CELL / 2;
-      doorZone = pick.wallZ * mw + pick.wallX + 1;
+    doorGroup=new THREE.Group();
+    doorWorldPos=new THREE.Vector3(wx,0,wz);
+    doorNormal=pick.dir==='h'?new THREE.Vector3(0,0,-1):new THREE.Vector3(1,0,0);
 
-      const DW   = 1.2;   // 문 너비
-      const DH   = 2.4;   // 문 높이
-      const DTH  = 0.10;  // 문짝 두께
-      const FRAME = 0.13; // 프레임 폭
+    const wallAnchor=new THREE.Group();
+    wallAnchor.position.set(wx,0,wz);
+    if (pick.dir==='v') wallAnchor.rotation.y=Math.PI/2;
+    doorGroup.add(wallAnchor);
 
-      const frameMat = new THREE.MeshLambertMaterial({ color: 0xff8fb0, emissive: 0x220010, emissiveIntensity: 0.2 });
-      const bodyMat  = new THREE.MeshLambertMaterial({ color: 0xff4d9e, emissive: 0x2a0018, emissiveIntensity: 0.18 });
-      const trimMat  = new THREE.MeshLambertMaterial({ color: 0xffbcd6 });
-      const goldMat  = new THREE.MeshLambertMaterial({ color: 0xffd700, emissive: 0x996600, emissiveIntensity: 0.4 });
+    const ED=0.0;
+    [[-(DW/2+FRAME/2),DH/2,ED,FRAME,DH+FRAME,T_WALL+0.04],
+     [DW/2+FRAME/2,DH/2,ED,FRAME,DH+FRAME,T_WALL+0.04],
+     [0,DH+FRAME/2,ED,DW+FRAME*2,FRAME,T_WALL+0.04]
+    ].forEach(([px,py,pz,gx,gy,gz])=>{
+      const m=new THREE.Mesh(new THREE.BoxGeometry(gx,gy,gz),frameMat);
+      m.position.set(px,py,pz); wallAnchor.add(m);
+    });
 
-      doorGroup    = new THREE.Group();
-      doorWorldPos = new THREE.Vector3(wx, 0, wz);
-      doorNormal   = pick.dir === 'h'
-        ? new THREE.Vector3(0, 0, -1)
-        : new THREE.Vector3(1, 0, 0);
+    const doorHinge=new THREE.Group();
+    doorHinge.position.set(-DW/2,0,ED+DTH/2+0.01);
+    wallAnchor.add(doorHinge);
+    const doorBody=new THREE.Mesh(new THREE.BoxGeometry(DW,DH,DTH),bodyMat);
+    doorBody.position.set(DW/2,DH/2,0); doorHinge.add(doorBody);
+    const molA=new THREE.Mesh(new THREE.BoxGeometry(DW*0.7,DH*0.35,0.025),trimMat);
+    molA.position.set(0,DH*0.25,DTH/2+0.013); doorBody.add(molA);
+    const molB=new THREE.Mesh(new THREE.BoxGeometry(DW*0.7,DH*0.28,0.025),trimMat);
+    molB.position.set(0,-DH*0.22,DTH/2+0.013); doorBody.add(molB);
+    const knob=new THREE.Mesh(new THREE.SphereGeometry(0.065,10,8),goldMat);
+    knob.position.set(DW*0.38,-DH*0.04,DTH/2+0.07); doorBody.add(knob);
+    const keyShaft=new THREE.Mesh(new THREE.CylinderGeometry(0.013,0.013,0.26,8),goldMat);
+    keyShaft.rotation.z=Math.PI/2; keyShaft.position.set(DW*0.38,DH*0.06,DTH/2+0.07); doorBody.add(keyShaft);
+    const keyBow=new THREE.Mesh(new THREE.TorusGeometry(0.065,0.016,8,14),goldMat);
+    keyBow.position.set(DW*0.38-0.17,DH*0.06,DTH/2+0.07); doorBody.add(keyBow);
+    const doorGlow=new THREE.PointLight(0xff69b4,2.0,9,1.3);
+    doorGlow.position.set(0,DH*0.5,1.2); wallAnchor.add(doorGlow);
 
-      // wallAnchor: 벽 중앙을 원점으로, 로컬 +Z = 벽의 법선(플레이어 쪽)
-      const wallAnchor = new THREE.Group();
-      wallAnchor.position.set(wx, 0, wz);
-      if (pick.dir === 'v') wallAnchor.rotation.y = Math.PI / 2;
-      doorGroup.add(wallAnchor);
-
-      // 문 프레임 — 벽 앞면에 살짝 돌출
-      const ED = 0.0; // 벽 정중앙에서 법선 방향 오프셋 (0 = 정중앙 = 벽 속에 박힘)
-      const frameL = new THREE.Mesh(new THREE.BoxGeometry(FRAME, DH + FRAME, T_WALL + 0.04), frameMat);
-      frameL.position.set(-DW / 2 - FRAME / 2, DH / 2, ED);
-      wallAnchor.add(frameL);
-      const frameR = new THREE.Mesh(new THREE.BoxGeometry(FRAME, DH + FRAME, T_WALL + 0.04), frameMat);
-      frameR.position.set(DW / 2 + FRAME / 2, DH / 2, ED);
-      wallAnchor.add(frameR);
-      const frameT = new THREE.Mesh(new THREE.BoxGeometry(DW + FRAME * 2, FRAME, T_WALL + 0.04), frameMat);
-      frameT.position.set(0, DH + FRAME / 2, ED);
-      wallAnchor.add(frameT);
-
-      // 문짝 힌지 그룹 — 왼쪽 끝이 회전 축
-      const doorHinge = new THREE.Group();
-      doorHinge.position.set(-DW / 2, 0, ED + DTH / 2 + 0.01);
-      wallAnchor.add(doorHinge);
-
-      const doorBody = new THREE.Mesh(new THREE.BoxGeometry(DW, DH, DTH), bodyMat);
-      doorBody.position.set(DW / 2, DH / 2, 0);
-      doorHinge.add(doorBody);
-
-      // 몰딩 장식 두 개
-      const molA = new THREE.Mesh(new THREE.BoxGeometry(DW * 0.7, DH * 0.35, 0.025), trimMat);
-      molA.position.set(0, DH * 0.25, DTH / 2 + 0.013);
-      doorBody.add(molA);
-      const molB = new THREE.Mesh(new THREE.BoxGeometry(DW * 0.7, DH * 0.28, 0.025), trimMat);
-      molB.position.set(0, -DH * 0.22, DTH / 2 + 0.013);
-      doorBody.add(molB);
-
-      // 금색 손잡이
-      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 8), goldMat);
-      knob.position.set(DW * 0.38, -DH * 0.04, DTH / 2 + 0.07);
-      doorBody.add(knob);
-
-      // 열쇠구멍 장식
-      const keyShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.26, 8), goldMat);
-      keyShaft.rotation.z = Math.PI / 2;
-      keyShaft.position.set(DW * 0.38, DH * 0.06, DTH / 2 + 0.07);
-      doorBody.add(keyShaft);
-      const keyBow = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.016, 8, 14), goldMat);
-      keyBow.position.set(DW * 0.38 - 0.17, DH * 0.06, DTH / 2 + 0.07);
-      doorBody.add(keyBow);
-      const keyT1 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.065, 0.012), goldMat);
-      keyT1.position.set(DW * 0.38 + 0.07, DH * 0.06 - 0.05, DTH / 2 + 0.07);
-      doorBody.add(keyT1);
-      const keyT2 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.045, 0.012), goldMat);
-      keyT2.position.set(DW * 0.38 + 0.035, DH * 0.06 - 0.085, DTH / 2 + 0.07);
-      doorBody.add(keyT2);
-
-      // 분홍 분위기 조명
-      const doorGlow = new THREE.PointLight(0xff69b4, 2.0, 9, 1.3);
-      doorGlow.position.set(0, DH * 0.5, 1.2);
-      wallAnchor.add(doorGlow);
-
-      // 피봇 저장 (애니메이션용)
-      (doorGroup as any)._panel    = doorHinge;
-      (doorGroup as any)._angle    = 0;
-      (doorGroup as any)._keyAngle = 0;
-      (doorGroup as any)._key      = keyShaft;
-      (doorGroup as any)._keyBow   = keyBow;
-
-      scene.add(doorGroup);
-    }
+    (doorGroup as any)._panel=doorHinge;
+    (doorGroup as any)._angle=0;
+    (doorGroup as any)._keyAngle=0;
+    (doorGroup as any)._key=keyShaft;
+    scene.add(doorGroup);
   }
 
-  return { scene, wallBoxes, doorGroup, doorWorldPos, doorNormal, flashlight, ambientLight, doorZone };
+  // ── 차원1 엔티티 2종 ────────────────────────────────────────────────────────
+  const entities: EntityData[]=[];
+  const entityTex=makeEntitySpriteTexture();
+
+  // 엔티티1: 그림자 인간 (어두운 형체)
+  for (let i=0;i<2;i++) {
+    const ex=(3+i*6)*CELL+CELL/2, ez=(4+i*4)*CELL+CELL/2;
+    const group=new THREE.Group();
+    const spriteMat=new THREE.SpriteMaterial({
+      map:entityTex, transparent:true, depthWrite:false,
+      color:new THREE.Color(0.05,0.0,0.08), opacity:0.78
+    });
+    const sprite=new THREE.Sprite(spriteMat);
+    sprite.scale.set(2.0,2.8,1);
+    sprite.position.set(0,1.2,0);
+    group.add(sprite);
+
+    // 붉은 눈 발광
+    const eye=new THREE.Mesh(new THREE.SphereGeometry(0.08,6,4),new THREE.MeshBasicMaterial({color:0xff1111}));
+    eye.position.set(0.18,2.05,0.05); group.add(eye);
+    const eye2=new THREE.Mesh(new THREE.SphereGeometry(0.08,6,4),new THREE.MeshBasicMaterial({color:0xff1111}));
+    eye2.position.set(-0.18,2.05,0.05); group.add(eye2);
+
+    group.position.set(ex,0,ez);
+    scene.add(group);
+    entities.push({group,mesh:sprite,pos:new THREE.Vector3(ex,0,ez),vel:new THREE.Vector3(),phase:Math.random()*Math.PI*2,type:'shadow'});
+  }
+
+  // 엔티티2: 안개 구체 (발광 오브)
+  for (let i=0;i<2;i++) {
+    const ex=(6+i*5)*CELL+CELL/2, ez=(2+i*6)*CELL+CELL/2;
+    const group=new THREE.Group();
+    const orbMat=new THREE.MeshBasicMaterial({color:0xaaffee,transparent:true,opacity:0.75});
+    const orb=new THREE.Mesh(new THREE.SphereGeometry(0.42,12,8),orbMat);
+    group.add(orb);
+    const innerMat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.55});
+    const inner=new THREE.Mesh(new THREE.SphereGeometry(0.22,8,6),innerMat);
+    group.add(inner);
+    const gl=new THREE.PointLight(0x88ffdd,1.2,6,1.5);
+    group.add(gl);
+    group.position.set(ex,1.4,ez);
+    scene.add(group);
+    entities.push({group,mesh:orb,pos:new THREE.Vector3(ex,1.4,ez),vel:new THREE.Vector3(),phase:Math.random()*Math.PI*2,type:'orb'});
+  }
+
+  return {scene,wallBoxes,doorGroup,doorWorldPos,doorNormal,flashlight,ambientLight,doorZone,entities,pointLights};
 }
 
-// ─── 차원2 씬 데이터 타입 ────────────────────────────────────────────────────
+// ─── 차원2·3 공통 타입 ────────────────────────────────────────────────────────
 interface BeachBallData {
   group: THREE.Group;
   vel: THREE.Vector3;
   radius: number;
   collected: boolean;
 }
-
-const BALL_COLORS = [0xff3344, 0x2255ee, 0xffcc00, 0xff66bb, 0x33ee88, 0xff7700, 0x9933ff, 0x00ccff];
 
 interface EntityDim2Data {
   group: THREE.Group;
@@ -407,682 +591,840 @@ interface EntityDim2Data {
   phase: number;
 }
 
+interface PortalData {
+  mesh: THREE.Mesh;
+  pos: THREE.Vector3;
+  phase: number;
+}
+
 interface Dim2Data {
   scene: THREE.Scene;
   wallBoxes: WallBox[];
   entityGroups: EntityDim2Data[];
   balls: BeachBallData[];
+  portals: PortalData[];
+  algoName: string;
 }
 
-// ─── 차원2 씬 빌드 (백룸식 미로 — 드림코어 차원) ─────────────────────────────
+// ─── 차원2 씬 빌드 (백룸 드림코어 — 밝은 잔디) ───────────────────────────────
+const BALL_COLORS=[0xff3344,0x2255ee,0xffcc00,0xff66bb,0x33ee88,0xff7700,0x9933ff,0x00ccff];
+
+const ALGO_NAMES=["재귀 역추적","프림","크루스칼","사냥-죽이기","사이드와인더"];
+
 function buildDim2(): Dim2Data {
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x2d3645);
-  scene.fog = new THREE.FogExp2(0x1f2631, 0.08);
+  const algoIdx=Math.floor(Math.random()*5);
+  const algoName=ALGO_NAMES[algoIdx];
+  const mazeAlgos=[generateMaze,generateMazePrim,generateMazeKruskal,generateMazeHuntKill,generateMazeSidewinder];
+  const maze=mazeAlgos[algoIdx](DIM2_MW,DIM2_MH);
+  const mazeW=DIM2_MW*CELL, mazeH=DIM2_MH*CELL;
 
-  // 조명
-  scene.add(new THREE.AmbientLight(0x3a3f49, 0.14));
+  const scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x8ab87a); // 밝은 자연광
+  scene.fog=new THREE.FogExp2(0x90c070,0.045); // 밝은 안개
 
-  // 미로 생성 (DIM2_MW×DIM2_MH)
-  const maze = generateMaze(DIM2_MW, DIM2_MH);
-  const mazeW = DIM2_MW * CELL;
-  const mazeH = DIM2_MH * CELL;
+  // 밝은 조명
+  scene.add(new THREE.AmbientLight(0xd0f0c0,1.1)); // 훨씬 밝게
+  const sun=new THREE.DirectionalLight(0xfff8e0,0.9);
+  sun.position.set(mazeW/2,12,mazeH/2); scene.add(sun);
 
-  // ── 잔디 바닥 (미로 플레이 영역만) ─────────────────────────────────────
-  const grassTex = makeGrassTex();
-  grassTex.repeat.set(DIM2_MW * 2, DIM2_MH * 2);
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(mazeW + 0.5, mazeH + 0.5),
-    new THREE.MeshLambertMaterial({ map: grassTex })
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(mazeW / 2, 0, mazeH / 2);
-  scene.add(floor);
+  // 거칠거칠한 잔디 바닥
+  const grassTex=makeRoughGrassTex();
+  grassTex.repeat.set(DIM2_MW*3,DIM2_MH*3);
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(mazeW+0.5,mazeH+0.5),new THREE.MeshLambertMaterial({map:grassTex}));
+  floor.rotation.x=-Math.PI/2; floor.position.set(mazeW/2,0,mazeH/2); scene.add(floor);
 
-  // 절벽 아래 어두운 지면 (void)
-  const voidMat = new THREE.MeshLambertMaterial({ color: 0x080810 });
-  const voidFloor = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), voidMat);
-  voidFloor.rotation.x = -Math.PI / 2;
-  voidFloor.position.set(mazeW / 2, -18, mazeH / 2);
-  scene.add(voidFloor);
+  // void 바닥
+  const voidFloor=new THREE.Mesh(new THREE.PlaneGeometry(600,600),new THREE.MeshLambertMaterial({color:0x080810}));
+  voidFloor.rotation.x=-Math.PI/2; voidFloor.position.set(mazeW/2,-18,mazeH/2); scene.add(voidFloor);
 
-  // 절벽 경계 어두운 테두리 (경고 표시)
-  const edgeMat = new THREE.MeshLambertMaterial({ color: 0x182410 });
-  const edgeW = 4;
-  for (const [ex, ew, ez, eeh] of [
-    [mazeW / 2, mazeW + edgeW * 2, -edgeW / 2, edgeW],
-    [mazeW / 2, mazeW + edgeW * 2, mazeH + edgeW / 2, edgeW],
-    [-edgeW / 2, edgeW, mazeH / 2, mazeH],
-    [mazeW + edgeW / 2, edgeW, mazeH / 2, mazeH],
+  const edgeMat=new THREE.MeshLambertMaterial({color:0x182410});
+  const edgeW=4;
+  for (const [ex,ew,ez,eeh] of [
+    [mazeW/2,mazeW+edgeW*2,-edgeW/2,edgeW],
+    [mazeW/2,mazeW+edgeW*2,mazeH+edgeW/2,edgeW],
+    [-edgeW/2,edgeW,mazeH/2,mazeH],
+    [mazeW+edgeW/2,edgeW,mazeH/2,mazeH],
   ] as [number,number,number,number][]) {
-    const ep = new THREE.Mesh(new THREE.PlaneGeometry(ew, eeh), edgeMat);
-    ep.rotation.x = -Math.PI / 2;
-    ep.position.set(ex, -0.01, ez);
-    scene.add(ep);
+    const ep=new THREE.Mesh(new THREE.PlaneGeometry(ew,eeh),edgeMat);
+    ep.rotation.x=-Math.PI/2; ep.position.set(ex,-0.01,ez); scene.add(ep);
   }
 
-  // ── 벽 재료 ─────────────────────────────────────────────────────────────
-  const skyTex = makeWallSkyTex();
-  const ceilTex = makeCeilingTex();
-  const frameTex = makeWallFrameTex();
-  const skyMat  = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide });
-  const glassMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, transparent: true, opacity: 0.98 });
-  const outLineMat = new THREE.LineBasicMaterial({ color: 0xff99cc, transparent: true, opacity: 0.22 });
+  // 벽 재료
+  const skyTex=makeWallSkyTex();
+  const ceilTex=makeCeilingTex();
+  const skyMat=new THREE.MeshBasicMaterial({map:skyTex,side:THREE.BackSide});
+  const glassMat=new THREE.MeshBasicMaterial({map:skyTex,side:THREE.BackSide,transparent:true,opacity:0.95});
+  const outLineMat=new THREE.LineBasicMaterial({color:0xff99cc,transparent:true,opacity:0.22});
 
-  const wallBoxes: WallBox[] = [];
+  const wallBoxes: WallBox[]=[];
 
-  function addWall(
-    cx: number, cz: number,
-    width: number, height: number,
-    rotY: number,
-    glassOnPlus: boolean
-  ) {
-    const planeGeo = new THREE.PlaneGeometry(width, height);
-
-    const glassRotY = rotY + (glassOnPlus ? 0 : Math.PI);
-    const skyRotY   = rotY + (glassOnPlus ? Math.PI : 0);
-
-    const glassPlane = new THREE.Mesh(planeGeo, glassMat);
-    glassPlane.rotation.y = glassRotY;
-    glassPlane.position.set(cx, height / 2, cz);
-    scene.add(glassPlane);
-
-    const edgesGeo = new THREE.EdgesGeometry(planeGeo);
-    const outline  = new THREE.LineSegments(edgesGeo, outLineMat);
-    outline.rotation.y = glassRotY;
-    outline.position.set(cx, height / 2 + 0.002, cz);
-    scene.add(outline);
-
-    const skyPlane = new THREE.Mesh(planeGeo, skyMat);
-    skyPlane.rotation.y = skyRotY;
-    skyPlane.position.set(cx, height / 2, cz);
-    scene.add(skyPlane);
+  function addWall(cx: number,cz: number,width: number,height: number,rotY: number,glassOnPlus: boolean) {
+    const planeGeo=new THREE.PlaneGeometry(width,height);
+    const glassRotY=rotY+(glassOnPlus?0:Math.PI);
+    const skyRotY=rotY+(glassOnPlus?Math.PI:0);
+    const glassPlane=new THREE.Mesh(planeGeo,glassMat);
+    glassPlane.rotation.y=glassRotY; glassPlane.position.set(cx,height/2,cz); scene.add(glassPlane);
+    const edgesGeo=new THREE.EdgesGeometry(planeGeo);
+    const outline=new THREE.LineSegments(edgesGeo,outLineMat);
+    outline.rotation.y=glassRotY; outline.position.set(cx,height/2+0.002,cz); scene.add(outline);
+    const skyPlane=new THREE.Mesh(planeGeo,skyMat);
+    skyPlane.rotation.y=skyRotY; skyPlane.position.set(cx,height/2,cz); scene.add(skyPlane);
   }
 
-  const ceiling = new THREE.Mesh(
-    new THREE.PlaneGeometry(mazeW + 1, mazeH + 1),
-    new THREE.MeshLambertMaterial({ map: ceilTex, color: 0x20242b })
-  );
-  ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.set(mazeW / 2, H_WALL, mazeH / 2);
-  scene.add(ceiling);
+  const ceiling=new THREE.Mesh(new THREE.PlaneGeometry(mazeW+1,mazeH+1),new THREE.MeshLambertMaterial({map:ceilTex,color:0x20303a}));
+  ceiling.rotation.x=Math.PI/2; ceiling.position.set(mazeW/2,H_WALL,mazeH/2); scene.add(ceiling);
 
-  // ── 미로 벽 배치 ─────────────────────────────────────────────────────────
-  for (let r = 0; r < DIM2_MH; r++) {
-    for (let c = 0; c < DIM2_MW; c++) {
-      const cell = maze[r][c];
-      const wx = c * CELL;
-      const wz = r * CELL;
-
-      // 위쪽 벽 (수평, X 방향)
+  for (let r=0;r<DIM2_MH;r++) {
+    for (let c=0;c<DIM2_MW;c++) {
+      const cell=maze[r][c]; const wx=c*CELL,wz=r*CELL;
       if (cell.walls.top) {
-        const cx = wx + CELL / 2;
-        const cz = wz;
-        addWall(cx, cz, CELL, H_WALL, 0, true);
-        wallBoxes.push({ minX: cx - CELL / 2, maxX: cx + CELL / 2, minZ: cz - T_WALL / 2, maxZ: cz + T_WALL / 2 });
+        const cx2=wx+CELL/2,cz2=wz;
+        addWall(cx2,cz2,CELL,H_WALL,0,true);
+        wallBoxes.push({minX:cx2-CELL/2,maxX:cx2+CELL/2,minZ:cz2-T_WALL/2,maxZ:cz2+T_WALL/2});
       }
-      // 왼쪽 벽 (수직, Z 방향)
       if (cell.walls.left) {
-        const cx = wx;
-        const cz = wz + CELL / 2;
-        addWall(cx, cz, CELL, H_WALL, Math.PI / 2, true);
-        wallBoxes.push({ minX: cx - T_WALL / 2, maxX: cx + T_WALL / 2, minZ: cz - CELL / 2, maxZ: cz + CELL / 2 });
+        const cx2=wx,cz2=wz+CELL/2;
+        addWall(cx2,cz2,CELL,H_WALL,Math.PI/2,true);
+        wallBoxes.push({minX:cx2-T_WALL/2,maxX:cx2+T_WALL/2,minZ:cz2-CELL/2,maxZ:cz2+CELL/2});
       }
-      // 마지막 행: 아래쪽 벽
-      if (r === DIM2_MH - 1 && cell.walls.bottom) {
-        const cx = wx + CELL / 2;
-        const cz = wz + CELL;
-        addWall(cx, cz, CELL, H_WALL, 0, false);
-        wallBoxes.push({ minX: cx - CELL / 2, maxX: cx + CELL / 2, minZ: cz - T_WALL / 2, maxZ: cz + T_WALL / 2 });
+      if (r===DIM2_MH-1&&cell.walls.bottom) {
+        const cx2=wx+CELL/2,cz2=wz+CELL;
+        addWall(cx2,cz2,CELL,H_WALL,0,false);
+        wallBoxes.push({minX:cx2-CELL/2,maxX:cx2+CELL/2,minZ:cz2-T_WALL/2,maxZ:cz2+T_WALL/2});
       }
-      // 마지막 열: 오른쪽 벽
-      if (c === DIM2_MW - 1 && cell.walls.right) {
-        const cx = wx + CELL;
-        const cz = wz + CELL / 2;
-        addWall(cx, cz, CELL, H_WALL, Math.PI / 2, false);
-        wallBoxes.push({ minX: cx - T_WALL / 2, maxX: cx + T_WALL / 2, minZ: cz - CELL / 2, maxZ: cz + CELL / 2 });
+      if (c===DIM2_MW-1&&cell.walls.right) {
+        const cx2=wx+CELL,cz2=wz+CELL/2;
+        addWall(cx2,cz2,CELL,H_WALL,Math.PI/2,false);
+        wallBoxes.push({minX:cx2-T_WALL/2,maxX:cx2+T_WALL/2,minZ:cz2-CELL/2,maxZ:cz2+CELL/2});
       }
     }
   }
 
-  // ── 비치볼 ───────────────────────────────────────────────────────────────
-  const BALL_COLORS = [0xff3344, 0x2255ee, 0xffcc00, 0xff66bb, 0x33ee88, 0xff7700, 0x9933ff, 0x00ccff];
-  const balls: BeachBallData[] = [];
-  const makeBall = (bx: number, bz: number, radius: number, col: number) => {
-    const ballGroup = new THREE.Group();
-    ballGroup.add(new THREE.Mesh(
-      new THREE.SphereGeometry(radius, 16, 12),
-      new THREE.MeshLambertMaterial({ color: col })
-    ));
-    for (let si = 0; si < 3; si++) {
-      const stripe = new THREE.Mesh(
-        new THREE.TorusGeometry(radius * 1.007, 0.018, 6, 24),
-        new THREE.MeshLambertMaterial({ color: 0xffffff })
-      );
-      stripe.rotation.x = (si * Math.PI / 3);
-      ballGroup.add(stripe);
-    }
-    ballGroup.position.set(bx, radius, bz);
-    scene.add(ballGroup);
-    balls.push({ group: ballGroup, vel: new THREE.Vector3(), radius, collected: false });
-  };
-  for (let i = 0; i < 240; i++) {
-    const cx = 1 + (i * 3) % (DIM2_MW - 1);
-    const cz = 1 + (i * 5) % (DIM2_MH - 1);
-    makeBall(cx * CELL + CELL / 2, cz * CELL + CELL / 2, 0.38 + (i % 3) * 0.06, BALL_COLORS[i % BALL_COLORS.length]);
+  // ── 포탈 (3차원으로 이동) ───────────────────────────────────────────────────
+  const portals: PortalData[]=[];
+  const portalCandidates=wallBoxes.filter((_,i)=>i%8===2).slice(0,6);
+  const portalMat=new THREE.MeshBasicMaterial({color:0x00ffcc,transparent:true,opacity:0.72,side:THREE.DoubleSide});
+  const portalFrameMat=new THREE.MeshBasicMaterial({color:0x00ffaa,wireframe:true});
+  for (const wb of portalCandidates) {
+    const px=(wb.minX+wb.maxX)/2;
+    const pz=(wb.minZ+wb.maxZ)/2;
+    const isH=wb.maxX-wb.minX>T_WALL*3;
+    const portalGeo=new THREE.PlaneGeometry(1.1,2.2);
+    const portalMesh=new THREE.Mesh(portalGeo,portalMat);
+    portalMesh.position.set(px,1.1,pz);
+    if (!isH) portalMesh.rotation.y=Math.PI/2;
+    scene.add(portalMesh);
+    const frame=new THREE.Mesh(new THREE.BoxGeometry(isH?1.2:0.1,2.3,isH?0.1:1.2),portalFrameMat);
+    frame.position.set(px,1.1,pz); scene.add(frame);
+    const glow=new THREE.PointLight(0x00ffcc,1.5,4,1.5);
+    glow.position.set(px,1.5,pz); scene.add(glow);
+    portals.push({mesh:portalMesh,pos:new THREE.Vector3(px,0,pz),phase:Math.random()*Math.PI*2});
   }
 
-  // ── 꽃-눈 엔티티 ─────────────────────────────────────────────────────────
-  const entityCells: [number, number][] = [[1,4],[3,1],[5,6],[7,3],[2,7]];
-  const entityGroups: EntityDim2Data[] = [];
-  const entityTex = makeEntitySpriteTexture();
+  // ── 비치볼 ──────────────────────────────────────────────────────────────────
+  const balls: BeachBallData[]=[];
+  for (let i=0;i<240;i++) {
+    const cx2=1+(i*3)%(DIM2_MW-1), cz2=1+(i*5)%(DIM2_MH-1);
+    const bx=cx2*CELL+CELL/2, bz=cz2*CELL+CELL/2;
+    const radius=0.38+(i%3)*0.06;
+    const col=BALL_COLORS[i%BALL_COLORS.length];
+    const ballGroup=new THREE.Group();
+    ballGroup.add(new THREE.Mesh(new THREE.SphereGeometry(radius,16,12),new THREE.MeshLambertMaterial({color:col})));
+    for (let si=0;si<3;si++) {
+      const stripe=new THREE.Mesh(new THREE.TorusGeometry(radius*1.007,0.018,6,24),new THREE.MeshLambertMaterial({color:0xffffff}));
+      stripe.rotation.x=si*Math.PI/3; ballGroup.add(stripe);
+    }
+    ballGroup.position.set(bx,radius,bz); scene.add(ballGroup);
+    balls.push({group:ballGroup,vel:new THREE.Vector3(),radius,collected:false});
+  }
 
-  for (const [er, ec] of entityCells) {
-    if (er >= DIM2_MH || ec >= DIM2_MW) continue;
-    const ex = ec * CELL + CELL / 2;
-    const ez = er * CELL + CELL / 2;
-    const group = new THREE.Group();
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: entityTex, transparent: true, depthWrite: false }));
-    sprite.scale.set(2.3, 3.0, 1);
-    sprite.position.set(0, 1.2, 0);
+  // ── 꽃-눈 엔티티 ─────────────────────────────────────────────────────────────
+  const entityCells: [number,number][]= [[1,4],[3,1],[5,6],[7,3],[2,7]];
+  const entityGroups: EntityDim2Data[]=[];
+  const entityTex=makeEntitySpriteTexture();
+  for (const [er,ec] of entityCells) {
+    if (er>=DIM2_MH||ec>=DIM2_MW) continue;
+    const ex=ec*CELL+CELL/2, ez=er*CELL+CELL/2;
+    const group=new THREE.Group();
+    const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:entityTex,transparent:true,depthWrite:false}));
+    sprite.scale.set(2.3,3.0,1);
+    sprite.position.set(0,1.2,0);
     group.add(sprite);
-    group.position.set(ex, 0, ez);
-    group.rotation.y = Math.random() * Math.PI * 2;
+    group.position.set(ex,0,ez);
+    group.rotation.y=Math.random()*Math.PI*2;
     scene.add(group);
-    entityGroups.push({
-      group, sprite,
-      pos: new THREE.Vector3(ex, 0, ez),
-      vel: new THREE.Vector3(),
-      phase: Math.random() * Math.PI * 2,
-    });
+    entityGroups.push({group,sprite,pos:new THREE.Vector3(ex,0,ez),vel:new THREE.Vector3(),phase:Math.random()*Math.PI*2});
   }
 
-  return { scene, wallBoxes, entityGroups, balls };
+  return {scene,wallBoxes,entityGroups,balls,portals,algoName};
 }
 
-// ─── 컴포넌트 ────────────────────────────────────────────────────────────────
+// ─── 차원3 씬 데이터 타입 ─────────────────────────────────────────────────────
+interface EntityDim3Data {
+  group: THREE.Group;
+  sprite: THREE.Sprite;
+  pos: THREE.Vector3;
+  vel: THREE.Vector3;
+  phase: number;
+  type: 'ghost'|'janitor';
+}
+
+interface Dim3Data {
+  scene: THREE.Scene;
+  wallBoxes: WallBox[];
+  entityGroups: EntityDim3Data[];
+}
+
+// ─── 차원3 씬 빌드 (학교) ────────────────────────────────────────────────────
+function buildDim3(): Dim3Data {
+  const maze=generateMazeRandom(DIM3_MW,DIM3_MH);
+  const wallBoxes=buildWallBoxes(maze,DIM3_MW,DIM3_MH);
+  const mazeW=DIM3_MW*CELL, mazeH=DIM3_MH*CELL;
+
+  const scene=new THREE.Scene();
+  scene.background=new THREE.Color(0xd0d8dc);
+  scene.fog=new THREE.Fog(0xd0d8dc,12,55);
+
+  // 밝은 형광등 같은 조명
+  scene.add(new THREE.AmbientLight(0xfff8f0,1.4));
+  for (let z=0;z<DIM3_MH;z+=2) for (let x=0;x<DIM3_MW;x+=2) {
+    const fl=new THREE.PointLight(0xfff5e8,1.1,CELL*5,1.6);
+    fl.position.set(x*CELL+CELL/2,H_WALL-0.05,z*CELL+CELL/2);
+    fl.userData.baseIntensity=fl.intensity;
+    fl.userData.phase=Math.random()*Math.PI*2;
+    scene.add(fl);
+    // 형광등 메시
+    const tubeMat=new THREE.MeshBasicMaterial({color:0xfffff0});
+    const tube=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.05,CELL*0.7),tubeMat);
+    tube.position.set(x*CELL+CELL/2,H_WALL-0.02,z*CELL+CELL/2); scene.add(tube);
+  }
+
+  // 학교 타일 바닥
+  const tileTex=makeSchoolTileTex(); tileTex.repeat.set(DIM3_MW*2,DIM3_MH*2);
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(mazeW+2,mazeH+2),new THREE.MeshLambertMaterial({map:tileTex}));
+  floor.rotation.x=-Math.PI/2; floor.position.set(mazeW/2,0,mazeH/2); scene.add(floor);
+
+  // void 바닥
+  const voidFloor=new THREE.Mesh(new THREE.PlaneGeometry(600,600),new THREE.MeshLambertMaterial({color:0x080810}));
+  voidFloor.rotation.x=-Math.PI/2; voidFloor.position.set(mazeW/2,-18,mazeH/2); scene.add(voidFloor);
+
+  // 천장 (흰색 타일)
+  const ceilTex=makeCheckerTex(0xe8e8e8,0xf0f0f0); ceilTex.repeat.set(DIM3_MW*2,DIM3_MH*2);
+  const ceil=new THREE.Mesh(new THREE.PlaneGeometry(mazeW+2,mazeH+2),new THREE.MeshLambertMaterial({map:ceilTex}));
+  ceil.rotation.x=Math.PI/2; ceil.position.set(mazeW/2,H_WALL,mazeH/2); scene.add(ceil);
+
+  // 학교 벽
+  const wallTex=makeSchoolWallTex(); wallTex.repeat.set(1.0,1.0);
+  const wallMat=new THREE.MeshLambertMaterial({map:wallTex});
+  const wallGeoH=new THREE.BoxGeometry(CELL+T_WALL,H_WALL,T_WALL);
+  const wallGeoV=new THREE.BoxGeometry(T_WALL,H_WALL,CELL+T_WALL);
+  const mH: THREE.Matrix4[]=[],mV: THREE.Matrix4[]=[];
+  const m4=new THREE.Matrix4();
+  for (let z=0;z<DIM3_MH;z++) for (let x=0;x<DIM3_MW;x++) {
+    const cell=maze[z][x]; const wx=x*CELL,wz=z*CELL;
+    if (cell.walls.top)   mH.push(m4.clone().makeTranslation(wx+CELL/2,H_WALL/2,wz));
+    if (cell.walls.left)  mV.push(m4.clone().makeTranslation(wx,H_WALL/2,wz+CELL/2));
+    if (z===DIM3_MH-1&&cell.walls.bottom) mH.push(m4.clone().makeTranslation(wx+CELL/2,H_WALL/2,wz+CELL));
+    if (x===DIM3_MW-1&&cell.walls.right)  mV.push(m4.clone().makeTranslation(wx+CELL,H_WALL/2,wz+CELL/2));
+  }
+  if (mH.length>0){const im=new THREE.InstancedMesh(wallGeoH,wallMat,mH.length);mH.forEach((m,i)=>im.setMatrixAt(i,m));im.instanceMatrix.needsUpdate=true;scene.add(im);}
+  if (mV.length>0){const im=new THREE.InstancedMesh(wallGeoV,wallMat,mV.length);mV.forEach((m,i)=>im.setMatrixAt(i,m));im.instanceMatrix.needsUpdate=true;scene.add(im);}
+
+  // ── 차원3 엔티티 2종 ─────────────────────────────────────────────────────────
+  const entityGroups: EntityDim3Data[]=[];
+  const entityTex=makeEntitySpriteTexture();
+
+  // 유령 학생 (흰색/파란 투명)
+  for (let i=0;i<2;i++) {
+    const ex=(2+i*5)*CELL+CELL/2, ez=(3+i*4)*CELL+CELL/2;
+    const group=new THREE.Group();
+    const spriteMat=new THREE.SpriteMaterial({
+      map:entityTex, transparent:true, depthWrite:false,
+      color:new THREE.Color(0.75,0.88,1.0), opacity:0.62
+    });
+    const sprite=new THREE.Sprite(spriteMat);
+    sprite.scale.set(2.0,2.8,1);
+    sprite.position.set(0,1.2,0);
+    group.add(sprite);
+    const gl=new THREE.PointLight(0x88aaff,0.8,4,1.5);
+    group.add(gl);
+    group.position.set(ex,0,ez);
+    scene.add(group);
+    entityGroups.push({group,sprite,pos:new THREE.Vector3(ex,0,ez),vel:new THREE.Vector3(),phase:Math.random()*Math.PI*2,type:'ghost'});
+  }
+
+  // 관리인 (어두운 갈색)
+  for (let i=0;i<2;i++) {
+    const ex=(1+i*7)*CELL+CELL/2, ez=(6+i*2)*CELL+CELL/2;
+    const group=new THREE.Group();
+    const spriteMat=new THREE.SpriteMaterial({
+      map:entityTex, transparent:true, depthWrite:false,
+      color:new THREE.Color(0.32,0.22,0.12), opacity:0.9
+    });
+    const sprite=new THREE.Sprite(spriteMat);
+    sprite.scale.set(2.2,3.2,1);
+    sprite.position.set(0,1.3,0);
+    group.add(sprite);
+    // 녹색 눈
+    const eye=new THREE.Mesh(new THREE.SphereGeometry(0.07,5,4),new THREE.MeshBasicMaterial({color:0x00ff44}));
+    eye.position.set(0.15,2.1,0.05); group.add(eye);
+    const eye2=eye.clone(); eye2.position.set(-0.15,2.1,0.05); group.add(eye2);
+    group.position.set(ex,0,ez);
+    scene.add(group);
+    entityGroups.push({group,sprite,pos:new THREE.Vector3(ex,0,ez),vel:new THREE.Vector3(),phase:Math.random()*Math.PI*2,type:'janitor'});
+  }
+
+  return {scene,wallBoxes,entityGroups};
+}
+
+// ─── 컴포넌트 ─────────────────────────────────────────────────────────────────
 export default function MazeEngine({
   serverId,
-  complexity = 5,
+  complexity=5,
   equippedFlashlight,
-  pointerSensitivity = 1,
-  initialPart = null,
-  initialDimension = null,
+  pointerSensitivity=1,
+  initialPart=null,
+  initialDimension=null,
   onDoorZoneChange,
   onRoomChange,
   onPositionChange,
   onFlashlightChange,
+  onDimensionChange,
 }: MazeEngineProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [locked, setLocked] = useState(false);
-  const [dimension, setDimension] = useState<1|2>(1);
-  const [doorState, setDoorState] = useState<'closed'|'unlocking'|'opening'|'open'>('closed');
-  const [showDoorHint, setShowDoorHint] = useState(false);
-  const [dead, setDead] = useState(false);
-  const [gazeProgress, setGazeProgress] = useState(0);
-  const [inventory, setInventory] = useState(0);
-  const [falling, setFalling] = useState(false);
-  const initialAnnouncementSentRef = useRef(false);
+  const containerRef=useRef<HTMLDivElement>(null);
+  const [locked,setLocked]=useState(false);
+  const [dimension,setDimension]=useState<1|2|3>(1);
+  const [doorState,setDoorState]=useState<'closed'|'unlocking'|'opening'|'open'>('closed');
+  const [showDoorHint,setShowDoorHint]=useState(false);
+  const [dead,setDead]=useState(false);
+  const [gazeProgress,setGazeProgress]=useState(0);
+  const [inventory,setInventory]=useState(0);
+  const [falling,setFalling]=useState(false);
+  const [currentAlgo,setCurrentAlgo]=useState('');
+  const initialAnnouncementSentRef=useRef(false);
 
-  // refs
-  const yawRef      = useRef(0);
-  const pitchRef    = useRef(0);
-  const lockedRef   = useRef(false);
-  const keysRef     = useRef<Record<string,boolean>>({});
-  const flashOnRef  = useRef(true);
-  const flashRef    = useRef<THREE.SpotLight|null>(null);
-  const wallBoxRef  = useRef<WallBox[]>([]);
-  const posRef      = useRef({ x: CELL/2, z: CELL/2 });
-  const bobRef      = useRef(0);
-  const posTickRef  = useRef(0);
-  const sensRef     = useRef(BASE_SENS * pointerSensitivity);
-  const dimRef      = useRef<1|2>(1);
-  const deadRef     = useRef(false);
-  const dim2DataRef = useRef<Dim2Data|null>(null);
-  const dim1DataRef = useRef<Dim1Data&{flashlight:THREE.SpotLight;ambientLight:THREE.AmbientLight}|null>(null);
-  const doorZoneRef = useRef<number | null>(null);
-  const activeCameraRef = useRef<THREE.PerspectiveCamera|null>(null);
-  const activeSceneRef  = useRef<THREE.Scene|null>(null);
-  const doorStateRef    = useRef<'closed'|'unlocking'|'opening'|'open'>('closed');
-  const gazeRef         = useRef({ time: 0, spriteIdx: -1 });
-  const keyPressBuf     = useRef<Set<string>>(new Set());
-  const inventoryRef    = useRef(0);
-  const fallingRef      = useRef(false);
-  const fallYRef        = useRef(0);
-  const fallSpeedRef    = useRef(0);
+  const yawRef=useRef(0);
+  const pitchRef=useRef(0);
+  const lockedRef=useRef(false);
+  const keysRef=useRef<Record<string,boolean>>({});
+  const flashOnRef=useRef(true);
+  const flashRef=useRef<THREE.SpotLight|null>(null);
+  const wallBoxRef=useRef<WallBox[]>([]);
+  const posRef=useRef({x:CELL/2,z:CELL/2});
+  const bobRef=useRef(0);
+  const posTickRef=useRef(0);
+  const sensRef=useRef(BASE_SENS*pointerSensitivity);
+  const dimRef=useRef<1|2|3>(1);
+  const deadRef=useRef(false);
+  const dim2DataRef=useRef<Dim2Data|null>(null);
+  const dim3DataRef=useRef<Dim3Data|null>(null);
+  const dim1DataRef=useRef<(Dim1Data&{flashlight:THREE.SpotLight;ambientLight:THREE.AmbientLight})|null>(null);
+  const doorZoneRef=useRef<number|null>(null);
+  const activeCameraRef=useRef<THREE.PerspectiveCamera|null>(null);
+  const activeSceneRef=useRef<THREE.Scene|null>(null);
+  const doorStateRef=useRef<'closed'|'unlocking'|'opening'|'open'>('closed');
+  const gazeRef=useRef({time:0,spriteIdx:-1});
+  const keyPressBuf=useRef<Set<string>>(new Set());
+  const inventoryRef=useRef(0);
+  const fallingRef=useRef(false);
+  const fallYRef=useRef(0);
+  const fallSpeedRef=useRef(0);
+  const portalCooldownRef=useRef(0);
 
-  sensRef.current = BASE_SENS * pointerSensitivity;
+  sensRef.current=BASE_SENS*pointerSensitivity;
 
-  const resetToDim1 = useCallback(() => {
-    dimRef.current = 1;
+  const resetToDim1=useCallback(()=>{
+    dimRef.current=1;
     setDimension(1);
-    deadRef.current = false;
+    onDimensionChange?.(1);
+    deadRef.current=false;
     setDead(false);
-    gazeRef.current = { time:0, spriteIdx:-1 };
+    gazeRef.current={time:0,spriteIdx:-1};
     setGazeProgress(0);
-    fallingRef.current = false;
-    fallYRef.current = 0;
-    fallSpeedRef.current = 0;
+    fallingRef.current=false; fallYRef.current=0; fallSpeedRef.current=0;
     setFalling(false);
-    inventoryRef.current = 0;
-    setInventory(0);
-    posRef.current = { x: CELL/2, z: CELL/2 };
-    yawRef.current = 0; pitchRef.current = 0;
+    inventoryRef.current=0; setInventory(0);
+    posRef.current={x:CELL/2,z:CELL/2};
+    yawRef.current=0; pitchRef.current=0;
     if (dim1DataRef.current) {
-      activeSceneRef.current = dim1DataRef.current.scene;
-      wallBoxRef.current = dim1DataRef.current.wallBoxes;
+      activeSceneRef.current=dim1DataRef.current.scene;
+      wallBoxRef.current=dim1DataRef.current.wallBoxes;
     }
     onRoomChange?.(null);
-    initialAnnouncementSentRef.current = true;
-  }, []);
+    initialAnnouncementSentRef.current=true;
+    portalCooldownRef.current=0;
+  },[onDimensionChange]);
 
-  useEffect(() => {
-    const container = containerRef.current;
+  useEffect(()=>{
+    const container=containerRef.current;
     if (!container) return;
-    const W = container.clientWidth || window.innerWidth;
-    const H = container.clientHeight || window.innerHeight;
+    const W=container.clientWidth||window.innerWidth;
+    const H=container.clientHeight||window.innerHeight;
 
-    // ── 렌더러 ──────────────────────────────────────────────────────────────
-    const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-    renderer.setSize(W, H);
+    const renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:"high-performance"});
+    renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+    renderer.setSize(W,H);
     container.appendChild(renderer.domElement);
 
-    // ── 카메라 ──────────────────────────────────────────────────────────────
-    const camera = new THREE.PerspectiveCamera(75, W/H, 0.05, 120);
-    camera.position.set(CELL/2, P_HEIGHT, CELL/2);
-    activeCameraRef.current = camera;
+    const camera=new THREE.PerspectiveCamera(75,W/H,0.05,120);
+    camera.position.set(CELL/2,P_HEIGHT,CELL/2);
+    activeCameraRef.current=camera;
 
-    // ── 두 차원 씬 빌드 ─────────────────────────────────────────────────────
-    const d1 = buildDim1(complexity, equippedFlashlight ?? null);
-    dim1DataRef.current = d1;
-    doorZoneRef.current = d1.doorZone ?? null;
-    onDoorZoneChange?.(d1.doorZone ?? null);
-    const d2 = buildDim2();
-    dim2DataRef.current = d2;
+    const d1=buildDim1(complexity,equippedFlashlight??null);
+    dim1DataRef.current=d1;
+    doorZoneRef.current=d1.doorZone??null;
+    onDoorZoneChange?.(d1.doorZone??null);
+    const d2=buildDim2();
+    dim2DataRef.current=d2;
+    setCurrentAlgo(d2.algoName);
+    const d3=buildDim3();
+    dim3DataRef.current=d3;
 
-    // 초기 활성 씬 = 차원1
-    activeSceneRef.current = d1.scene;
-    wallBoxRef.current = d1.wallBoxes;
-    flashRef.current = d1.flashlight;
+    activeSceneRef.current=d1.scene;
+    wallBoxRef.current=d1.wallBoxes;
+    flashRef.current=d1.flashlight;
 
     if (!initialAnnouncementSentRef.current) {
-      if (initialDimension === 2) {
-        const targetPart = initialPart && initialPart > 0 ? initialPart : 1;
+      if (initialDimension===2) {
+        const targetPart=initialPart&&initialPart>0?initialPart:1;
         onRoomChange?.(targetPart);
       } else {
         onRoomChange?.(null);
       }
-      initialAnnouncementSentRef.current = true;
+      initialAnnouncementSentRef.current=true;
     }
 
-    // ── Pointer Lock ─────────────────────────────────────────────────────────
-    const onClick = () => { container.requestPointerLock(); };
-    container.addEventListener("click", onClick);
-
-    const onLockChange = () => {
-      const isLocked = document.pointerLockElement === container;
-      lockedRef.current = isLocked;
-      setLocked(isLocked);
+    const onClick=()=>{ container.requestPointerLock(); };
+    container.addEventListener("click",onClick);
+    const onLockChange=()=>{
+      const isLocked=document.pointerLockElement===container;
+      lockedRef.current=isLocked; setLocked(isLocked);
     };
-    document.addEventListener("pointerlockchange", onLockChange);
-    document.addEventListener("pointerlockerror", () => {});
-
-    const onMouseMove = (e: MouseEvent) => {
+    document.addEventListener("pointerlockchange",onLockChange);
+    document.addEventListener("pointerlockerror",()=>{});
+    const onMouseMove=(e: MouseEvent)=>{
       if (!lockedRef.current) return;
-      yawRef.current   -= e.movementX * sensRef.current;
-      pitchRef.current -= e.movementY * sensRef.current;
-      pitchRef.current  = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitchRef.current));
+      yawRef.current-=e.movementX*sensRef.current;
+      pitchRef.current-=e.movementY*sensRef.current;
+      pitchRef.current=Math.max(-MAX_PITCH,Math.min(MAX_PITCH,pitchRef.current));
     };
-    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mousemove",onMouseMove);
 
-    const onKeyDown = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      keysRef.current[k] = true;
+    const onKeyDown=(e: KeyboardEvent)=>{
+      const k=e.key.toLowerCase();
+      keysRef.current[k]=true;
       keyPressBuf.current.add(k);
-      if (k === "f") {
-        flashOnRef.current = !flashOnRef.current;
-        onFlashlightChange?.(flashOnRef.current);
-      }
+      if (k==="f"){flashOnRef.current=!flashOnRef.current;onFlashlightChange?.(flashOnRef.current);}
       if (["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k)) e.preventDefault();
     };
-    const onKeyUp = (e: KeyboardEvent) => { keysRef.current[e.key.toLowerCase()] = false; };
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("keyup", onKeyUp);
-
-    const onResize = () => {
-      const rw = container.clientWidth, rh = container.clientHeight;
-      camera.aspect = rw/rh; camera.updateProjectionMatrix();
-      renderer.setSize(rw, rh);
+    const onKeyUp=(e: KeyboardEvent)=>{ keysRef.current[e.key.toLowerCase()]=false; };
+    document.addEventListener("keydown",onKeyDown);
+    document.addEventListener("keyup",onKeyUp);
+    const onResize=()=>{
+      const rw=container.clientWidth,rh=container.clientHeight;
+      camera.aspect=rw/rh; camera.updateProjectionMatrix();
+      renderer.setSize(rw,rh);
     };
-    window.addEventListener("resize", onResize);
+    window.addEventListener("resize",onResize);
 
-    // ── 레이캐스터 (문/엔티티 감지) ─────────────────────────────────────────
-    const raycaster = new THREE.Raycaster();
-    const centerNDC = new THREE.Vector2(0, 0);
+    const raycaster=new THREE.Raycaster();
+    const centerNDC=new THREE.Vector2(0,0);
+    const clock=new THREE.Clock();
+    let t=0,raf: number;
 
-    // ── 애니메이션 루프 ──────────────────────────────────────────────────────
-    const clock = new THREE.Clock();
-    let t = 0, raf: number;
-
-    const animate = () => {
-      raf = requestAnimationFrame(animate);
+    const animate=()=>{
+      raf=requestAnimationFrame(animate);
       if (!activeSceneRef.current) return;
-      const dt = Math.min(clock.getDelta(), 0.05);
-      t += dt;
+      const dt=Math.min(clock.getDelta(),0.05);
+      t+=dt;
+      if (portalCooldownRef.current>0) portalCooldownRef.current-=dt;
 
-      const keys = keysRef.current;
-      const pos  = posRef.current;
-      const xKey = keyPressBuf.current.has("x");
+      const keys=keysRef.current;
+      const pos=posRef.current;
+      const xKey=keyPressBuf.current.has("x");
+      const qKey=keyPressBuf.current.has("q");
       keyPressBuf.current.clear();
+      const curDim=dimRef.current;
 
-      const curDim = dimRef.current;
+      camera.quaternion.setFromEuler(new THREE.Euler(pitchRef.current,yawRef.current,0,"YXZ"));
 
-      // 카메라 회전
-      camera.quaternion.setFromEuler(new THREE.Euler(pitchRef.current, yawRef.current, 0, "YXZ"));
+      const yaw=yawRef.current;
+      const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+      const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+      const move=new THREE.Vector3();
+      if (keys["w"]||keys["arrowup"])    move.addScaledVector(forward, 1);
+      if (keys["s"]||keys["arrowdown"])  move.addScaledVector(forward,-1);
+      if (keys["a"]||keys["arrowleft"])  move.addScaledVector(right,  -1);
+      if (keys["d"]||keys["arrowright"]) move.addScaledVector(right,   1);
 
-      // 이동
-      const yaw = yawRef.current;
-      const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-      const right   = new THREE.Vector3( Math.cos(yaw), 0, -Math.sin(yaw));
-      const move = new THREE.Vector3();
-      if (keys["w"]||keys["arrowup"])    move.addScaledVector(forward,  1);
-      if (keys["s"]||keys["arrowdown"])  move.addScaledVector(forward, -1);
-      if (keys["a"]||keys["arrowleft"])  move.addScaledVector(right,   -1);
-      if (keys["d"]||keys["arrowright"]) move.addScaledVector(right,    1);
-
-      const moving = move.lengthSq() > 0;
-      if (moving && !deadRef.current) {
-        move.normalize().multiplyScalar(SPEED * dt);
-        const wb = wallBoxRef.current;
-        const nx = pos.x + move.x;
-        if (!hitsWall(wb, nx, pos.z)) pos.x = nx;
-        const nz = pos.z + move.z;
-        if (!hitsWall(wb, pos.x, nz)) pos.z = nz;
+      const moving=move.lengthSq()>0;
+      if (moving&&!deadRef.current) {
+        move.normalize().multiplyScalar(SPEED*dt);
+        const wb=wallBoxRef.current;
+        const nx=pos.x+move.x;
+        if (!hitsWall(wb,nx,pos.z)) pos.x=nx;
+        const nz=pos.z+move.z;
+        if (!hitsWall(wb,pos.x,nz)) pos.z=nz;
       }
+      if (moving&&!fallingRef.current) bobRef.current+=8*dt;
+      const bobY=moving?Math.sin(bobRef.current)*0.028:0;
+      camera.position.set(pos.x,P_HEIGHT+bobY-fallYRef.current,pos.z);
 
-      if (moving && !fallingRef.current) bobRef.current += 8*dt;
-      const bobY = moving ? Math.sin(bobRef.current)*0.028 : 0;
-      camera.position.set(pos.x, P_HEIGHT + bobY - fallYRef.current, pos.z);
-
-      // ── 차원1 전용 로직 ────────────────────────────────────────────────────
-      if (curDim === 1 && d1.doorGroup && d1.doorWorldPos) {
-        const dstate = doorStateRef.current;
-
-        // XZ 평면 2D 거리 — Y 축 차이(카메라 높이)를 제외해야 정확함
-        const dx2d = pos.x - d1.doorWorldPos.x;
-        const dz2d = pos.z - d1.doorWorldPos.z;
-        const distToDoor2D = Math.sqrt(dx2d * dx2d + dz2d * dz2d);
-
-        const nearDoor = distToDoor2D < 2.5;
+      // ── 차원1 로직 ──────────────────────────────────────────────────────────
+      if (curDim===1&&d1.doorGroup&&d1.doorWorldPos) {
+        const dstate=doorStateRef.current;
+        const dx2d=pos.x-d1.doorWorldPos.x;
+        const dz2d=pos.z-d1.doorWorldPos.z;
+        const distToDoor2D=Math.sqrt(dx2d*dx2d+dz2d*dz2d);
+        const nearDoor=distToDoor2D<2.5;
         setShowDoorHint(nearDoor);
 
-        // 손전등
-        const fl = flashRef.current;
+        const fl=flashRef.current;
         if (fl) {
-          fl.intensity = flashOnRef.current ? d1.flashlight.userData.baseIntensity : 0;
+          fl.intensity=flashOnRef.current?d1.flashlight.userData.baseIntensity:0;
           fl.position.copy(camera.position);
-          const dir = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+          const dir=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
           fl.target.position.copy(camera.position).addScaledVector(dir,10);
           fl.target.updateMatrixWorld();
         }
 
-        // 문 상호작용
-        if (nearDoor && xKey && dstate === 'closed') {
-          doorStateRef.current = 'unlocking';
+        // 형광등 깜빡임
+        for (const pl of d1.pointLights) {
+          pl.userData.phase+=dt*(0.8+Math.random()*0.4);
+          const flicker=Math.sin(pl.userData.phase*3.7)*0.15+Math.sin(pl.userData.phase*11.3)*0.08;
+          pl.intensity=pl.userData.baseIntensity*(1+flicker);
+        }
+
+        if (nearDoor&&xKey&&dstate==='closed') {
+          doorStateRef.current='unlocking';
           setDoorState('unlocking');
           onDoorZoneChange?.(doorZoneRef.current);
         }
 
-        // 문 애니메이션
-        const panel = (d1.doorGroup as any)._panel as THREE.Group;
-        const keyMesh = (d1.doorGroup as any)._key as THREE.Mesh;
-        if (dstate === 'unlocking') {
-          (d1.doorGroup as any)._keyAngle = ((d1.doorGroup as any)._keyAngle ?? 0) + dt * 1.8;
-          if (keyMesh) keyMesh.rotation.z = Math.sin((d1.doorGroup as any)._keyAngle) * 0.6;
-          if ((d1.doorGroup as any)._keyAngle > Math.PI) {
-            doorStateRef.current = 'opening';
-            setDoorState('opening');
-          }
-        } else if (dstate === 'opening') {
-          (d1.doorGroup as any)._angle = Math.min(
-            (d1.doorGroup as any)._angle + dt * 1.5,
-            Math.PI / 2
-          );
-          panel.rotation.y = -(d1.doorGroup as any)._angle;
-          if ((d1.doorGroup as any)._angle >= Math.PI/2 - 0.05) {
-            doorStateRef.current = 'open';
-            setDoorState('open');
+        const panel=(d1.doorGroup as any)._panel as THREE.Group;
+        const keyMesh=(d1.doorGroup as any)._key as THREE.Mesh;
+        if (dstate==='unlocking') {
+          (d1.doorGroup as any)._keyAngle=((d1.doorGroup as any)._keyAngle??0)+dt*1.8;
+          if (keyMesh) keyMesh.rotation.z=Math.sin((d1.doorGroup as any)._keyAngle)*0.6;
+          if ((d1.doorGroup as any)._keyAngle>Math.PI){doorStateRef.current='opening';setDoorState('opening');}
+        } else if (dstate==='opening') {
+          (d1.doorGroup as any)._angle=Math.min((d1.doorGroup as any)._angle+dt*1.5,Math.PI/2);
+          panel.rotation.y=-(d1.doorGroup as any)._angle;
+          if ((d1.doorGroup as any)._angle>=Math.PI/2-0.05){doorStateRef.current='open';setDoorState('open');}
+        }
+
+        if (dstate==='open'&&distToDoor2D<1.8) {
+          const fwd=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+          const toDoor=new THREE.Vector3(d1.doorWorldPos.x-pos.x,0,d1.doorWorldPos.z-pos.z).normalize();
+          if (fwd.dot(toDoor)>0.35) {
+            dimRef.current=2; setDimension(2);
+            onDimensionChange?.(2);
+            setShowDoorHint(false);
+            const rebuilt=buildDim2();
+            dim2DataRef.current=rebuilt;
+            setCurrentAlgo(rebuilt.algoName);
+            const targetPart=initialPart&&initialPart>0?initialPart:1;
+            const tx=((targetPart-1)%DIM2_MW)*CELL+CELL/2;
+            const tz=Math.floor((targetPart-1)/DIM2_MW)*CELL+CELL/2;
+            pos.x=Math.max(CELL/2,Math.min(DIM2_MW*CELL-CELL/2,tx));
+            pos.z=Math.max(CELL/2,Math.min(DIM2_MH*CELL-CELL/2,tz));
+            yawRef.current=0; pitchRef.current=0;
+            fallingRef.current=false; fallYRef.current=0; fallSpeedRef.current=0;
+            activeSceneRef.current=rebuilt.scene;
+            wallBoxRef.current=rebuilt.wallBoxes;
+            onRoomChange?.(targetPart);
+            portalCooldownRef.current=2;
           }
         }
 
-        // 문 통과 → 차원2 진입 (문이 열린 뒤 플레이어가 벽을 향해 걸어가면)
-        if (dstate === 'open' && distToDoor2D < 1.8) {
-          const fwd   = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-          const toDoor = new THREE.Vector3(d1.doorWorldPos.x - pos.x, 0, d1.doorWorldPos.z - pos.z).normalize();
-          if (fwd.dot(toDoor) > 0.35) {
-            dimRef.current = 2;
-            setDimension(2);
-            setShowDoorHint(false);
-            const targetPart = initialPart && initialPart > 0 ? initialPart : 1;
-            const tx = ((targetPart - 1) % DIM2_MW) * CELL + CELL / 2;
-            const tz = Math.floor((targetPart - 1) / DIM2_MW) * CELL + CELL / 2;
-            pos.x = Math.max(CELL / 2, Math.min(DIM2_MW * CELL - CELL / 2, tx));
-            pos.z = Math.max(CELL / 2, Math.min(DIM2_MH * CELL - CELL / 2, tz));
-            yawRef.current = 0; pitchRef.current = 0;
-            fallingRef.current = false; fallYRef.current = 0; fallSpeedRef.current = 0;
-            activeSceneRef.current = d2.scene;
-            wallBoxRef.current = d2.wallBoxes;
-            onRoomChange?.(targetPart);
+        // 차원1 엔티티 이동 (그림자 인간 + 오브)
+        if (!deadRef.current) {
+          for (const ent of d1.entities) {
+            ent.phase+=dt;
+            const dx=pos.x-ent.pos.x;
+            const dz=pos.z-ent.pos.z;
+            const dist=Math.sqrt(dx*dx+dz*dz);
+            if (dist>1.5&&dist<40) {
+              const spd=(ent.type==='orb'?1.2:0.7)*dt;
+              const nx=ent.pos.x+(dx/dist)*spd;
+              const nz=ent.pos.z+(dz/dist)*spd;
+              if (!hitsWall(d1.wallBoxes,nx,ent.pos.z)) ent.pos.x=nx;
+              if (!hitsWall(d1.wallBoxes,ent.pos.x,nz)) ent.pos.z=nz;
+              ent.group.rotation.y=Math.atan2(dx,dz);
+            }
+            if (ent.type==='orb') {
+              ent.pos.y=1.4+Math.sin(ent.phase*1.8)*0.4;
+              ent.group.position.set(ent.pos.x,ent.pos.y,ent.pos.z);
+              const s=0.85+Math.sin(ent.phase*2.2)*0.15;
+              ent.group.scale.setScalar(s);
+            } else {
+              ent.group.position.set(ent.pos.x,0,ent.pos.z);
+            }
           }
         }
       }
 
-      // ── 차원2 전용 로직 ────────────────────────────────────────────────────
-      if (curDim === 2) {
-        const mazeWd = DIM2_MW * CELL;
-        const mazeHt = DIM2_MH * CELL;
+      // ── 차원2 로직 ──────────────────────────────────────────────────────────
+      if (curDim===2) {
+        const d2=dim2DataRef.current!;
+        const mazeWd=DIM2_MW*CELL, mazeHt=DIM2_MH*CELL;
 
-        // ── 절벽 낙하 ──────────────────────────────────────────────────────
-        const outOfBounds = pos.x < -0.4 || pos.x > mazeWd + 0.4 || pos.z < -0.4 || pos.z > mazeHt + 0.4;
-        if (outOfBounds && !fallingRef.current && !deadRef.current) {
-          fallingRef.current = true;
-          setFalling(true);
-        }
-        if (fallingRef.current) {
-          fallSpeedRef.current += 22 * dt;
-          fallYRef.current += fallSpeedRef.current * dt;
-          if (fallYRef.current > 14) {
-            fallingRef.current = false;
-            fallYRef.current = 0;
-            fallSpeedRef.current = 0;
-            setFalling(false);
-            const rebuilt = buildDim2();
-            dim2DataRef.current = rebuilt;
-            activeSceneRef.current = rebuilt.scene;
-            wallBoxRef.current = rebuilt.wallBoxes;
-            const targetPart = initialPart && initialPart > 0 ? initialPart : 1;
-            const tx = ((targetPart - 1) % DIM2_MW) * CELL + CELL / 2;
-            const tz = Math.floor((targetPart - 1) / DIM2_MW) * CELL + CELL / 2;
-            pos.x = Math.max(CELL / 2, Math.min(DIM2_MW * CELL - CELL / 2, tx));
-            pos.z = Math.max(CELL / 2, Math.min(DIM2_MH * CELL - CELL / 2, tz));
+        // 절벽 낙하
+        const outOfBounds=pos.x<-0.4||pos.x>mazeWd+0.4||pos.z<-0.4||pos.z>mazeHt+0.4;
+        if (outOfBounds&&!fallingRef.current&&!deadRef.current){fallingRef.current=true;setFalling(true);}
+        if (fallingRef.current){
+          fallSpeedRef.current+=22*dt;
+          fallYRef.current+=fallSpeedRef.current*dt;
+          if (fallYRef.current>14){
+            fallingRef.current=false; fallYRef.current=0; fallSpeedRef.current=0; setFalling(false);
+            const rebuilt=buildDim2();
+            dim2DataRef.current=rebuilt;
+            setCurrentAlgo(rebuilt.algoName);
+            activeSceneRef.current=rebuilt.scene;
+            wallBoxRef.current=rebuilt.wallBoxes;
+            const targetPart=initialPart&&initialPart>0?initialPart:1;
+            const tx=((targetPart-1)%DIM2_MW)*CELL+CELL/2;
+            const tz=Math.floor((targetPart-1)/DIM2_MW)*CELL+CELL/2;
+            pos.x=Math.max(CELL/2,Math.min(DIM2_MW*CELL-CELL/2,tx));
+            pos.z=Math.max(CELL/2,Math.min(DIM2_MH*CELL-CELL/2,tz));
             onRoomChange?.(targetPart);
             return;
           }
         }
 
         if (!deadRef.current) {
-          // ── 비치볼 물리 ─────────────────────────────────────────────────
+          // Q키: 공 던지기
+          if (qKey&&inventoryRef.current>0) {
+            inventoryRef.current--;
+            setInventory(inventoryRef.current);
+            const throwDir=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+            const radius=0.4;
+            const col=BALL_COLORS[Math.floor(Math.random()*BALL_COLORS.length)];
+            const ballGroup=new THREE.Group();
+            ballGroup.add(new THREE.Mesh(new THREE.SphereGeometry(radius,14,10),new THREE.MeshLambertMaterial({color:col})));
+            for (let si=0;si<3;si++) {
+              const stripe=new THREE.Mesh(new THREE.TorusGeometry(radius*1.007,0.018,6,24),new THREE.MeshLambertMaterial({color:0xffffff}));
+              stripe.rotation.x=si*Math.PI/3; ballGroup.add(stripe);
+            }
+            ballGroup.position.set(pos.x+throwDir.x*0.6,radius,pos.z+throwDir.z*0.6);
+            d2.scene.add(ballGroup);
+            d2.balls.push({
+              group:ballGroup,
+              vel:new THREE.Vector3(throwDir.x*14,0,throwDir.z*14),
+              radius,collected:false
+            });
+          }
+
+          // 비치볼 물리
           for (const ball of d2.balls) {
             if (ball.collected) continue;
-            const bx = ball.group.position.x;
-            const bz = ball.group.position.z;
-            const pdx = pos.x - bx;
-            const pdz = pos.z - bz;
-            const pdist = Math.sqrt(pdx * pdx + pdz * pdz);
-
-            // X키로 수집 (가까이 있을 때)
-            if (xKey && pdist < ball.radius + 1.2) {
-              ball.collected = true;
-              d2.scene.remove(ball.group);
-              inventoryRef.current++;
-              setInventory(inventoryRef.current);
-              continue;
+            const bx=ball.group.position.x, bz=ball.group.position.z;
+            const pdx=pos.x-bx, pdz=pos.z-bz;
+            const pdist=Math.sqrt(pdx*pdx+pdz*pdz);
+            if (xKey&&pdist<ball.radius+1.2){
+              ball.collected=true; d2.scene.remove(ball.group);
+              inventoryRef.current++; setInventory(inventoryRef.current); continue;
             }
-
-            // 플레이어가 공 밀기
-            if (pdist < P_RADIUS + ball.radius + 0.1 && pdist > 0.001) {
-              const pushStr = 4.5;
-              ball.vel.x -= (pdx / pdist) * pushStr;
-              ball.vel.z -= (pdz / pdist) * pushStr;
+            if (pdist<P_RADIUS+ball.radius+0.1&&pdist>0.001){
+              const pushStr=4.5;
+              ball.vel.x-=(pdx/pdist)*pushStr; ball.vel.z-=(pdz/pdist)*pushStr;
             }
-
-            // 공 물리: 마찰 + 이동 + 벽 충돌
-            const friction = Math.pow(BALL_FRICTION, dt * 60);
+            const friction=Math.pow(BALL_FRICTION,dt*60);
             ball.vel.multiplyScalar(friction);
-            const nbx = bx + ball.vel.x * dt;
-            const nbz = bz + ball.vel.z * dt;
-            if (!hitsWall(d2.wallBoxes, nbx, bz)) {
-              ball.group.position.x = nbx;
-            } else {
-              ball.vel.x *= -0.45;
-            }
-            if (!hitsWall(d2.wallBoxes, ball.group.position.x, nbz)) {
-              ball.group.position.z = nbz;
-            } else {
-              ball.vel.z *= -0.45;
-            }
-            // 굴리기 시각 효과
-            const spd2D = Math.sqrt(ball.vel.x ** 2 + ball.vel.z ** 2);
-            if (spd2D > 0.01) {
-              ball.group.rotation.z -= ball.vel.x * dt * (1 / ball.radius) * 0.5;
-              ball.group.rotation.x += ball.vel.z * dt * (1 / ball.radius) * 0.5;
+            const nbx=bx+ball.vel.x*dt, nbz=bz+ball.vel.z*dt;
+            if (!hitsWall(d2.wallBoxes,nbx,bz)) ball.group.position.x=nbx; else ball.vel.x*=-0.45;
+            if (!hitsWall(d2.wallBoxes,ball.group.position.x,nbz)) ball.group.position.z=nbz; else ball.vel.z*=-0.45;
+            const spd2D=Math.sqrt(ball.vel.x**2+ball.vel.z**2);
+            if (spd2D>0.01){
+              ball.group.rotation.z-=ball.vel.x*dt*(1/ball.radius)*0.5;
+              ball.group.rotation.x+=ball.vel.z*dt*(1/ball.radius)*0.5;
             }
           }
-          if (d2.balls.length < 300) {
-            for (let s = 0; s < 4; s++) {
-              const sx = Math.random() * mazeWd;
-              const sz = Math.random() * mazeHt;
-              if (hitsWall(d2.wallBoxes, sx, sz)) continue;
-              const radius = 0.34 + Math.random() * 0.16;
-              const col = BALL_COLORS[(Math.random() * BALL_COLORS.length) | 0];
-              const ballGroup = new THREE.Group();
-              ballGroup.add(new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 12), new THREE.MeshLambertMaterial({ color: col })));
-              for (let si = 0; si < 3; si++) {
-                const stripe = new THREE.Mesh(new THREE.TorusGeometry(radius * 1.007, 0.018, 6, 24), new THREE.MeshLambertMaterial({ color: 0xffffff }));
-                stripe.rotation.x = (si * Math.PI / 3);
-                ballGroup.add(stripe);
-              }
-              ballGroup.position.set(sx, radius, sz);
-              d2.scene.add(ballGroup);
-              d2.balls.push({ group: ballGroup, vel: new THREE.Vector3(), radius, collected: false });
+          if (d2.balls.length<300){
+            for (let s=0;s<4;s++){
+              const sx=Math.random()*mazeWd, sz=Math.random()*mazeHt;
+              if (hitsWall(d2.wallBoxes,sx,sz)) continue;
+              const radius=0.34+Math.random()*0.16;
+              const col=BALL_COLORS[(Math.random()*BALL_COLORS.length)|0];
+              const ballGroup=new THREE.Group();
+              ballGroup.add(new THREE.Mesh(new THREE.SphereGeometry(radius,16,12),new THREE.MeshLambertMaterial({color:col})));
+              for (let si=0;si<3;si++){const stripe=new THREE.Mesh(new THREE.TorusGeometry(radius*1.007,0.018,6,24),new THREE.MeshLambertMaterial({color:0xffffff}));stripe.rotation.x=si*Math.PI/3;ballGroup.add(stripe);}
+              ballGroup.position.set(sx,radius,sz); d2.scene.add(ballGroup);
+              d2.balls.push({group:ballGroup,vel:new THREE.Vector3(),radius,collected:false});
             }
           }
 
-          // ── 꽃-눈 엔티티 이동 + 애니메이션 ─────────────────────────────
+          // 포탈 애니메이션 + 진입 감지
+          for (const portal of d2.portals) {
+            portal.phase+=dt;
+            const mat=portal.mesh.material as THREE.MeshBasicMaterial;
+            mat.opacity=0.55+Math.sin(portal.phase*2.5)*0.25;
+            portal.mesh.rotation.y+=dt*0.8;
+            const pdx=pos.x-portal.pos.x, pdz=pos.z-portal.pos.z;
+            const pdist=Math.sqrt(pdx*pdx+pdz*pdz);
+            if (pdist<1.6&&portalCooldownRef.current<=0) {
+              // 3차원으로 진입
+              dimRef.current=3; setDimension(3);
+              onDimensionChange?.(3);
+              const rebuilt3=buildDim3();
+              dim3DataRef.current=rebuilt3;
+              pos.x=DIM3_MW*CELL/2; pos.z=DIM3_MH*CELL/2;
+              yawRef.current=0; pitchRef.current=0;
+              fallingRef.current=false; fallYRef.current=0; fallSpeedRef.current=0;
+              activeSceneRef.current=rebuilt3.scene;
+              wallBoxRef.current=rebuilt3.wallBoxes;
+              portalCooldownRef.current=3;
+              break;
+            }
+          }
+
+          // 꽃-눈 엔티티 이동
           for (const ent of d2.entityGroups) {
-            ent.phase += dt;
-
-            const dx = pos.x - ent.pos.x;
-            const dz = pos.z - ent.pos.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-
-            if (dist > 1.8 && dist < 30 && !fallingRef.current) {
-              // 공이 진로를 막는지 확인
-              let ballBlock = false;
+            ent.phase+=dt;
+            const dx=pos.x-ent.pos.x, dz=pos.z-ent.pos.z;
+            const dist=Math.sqrt(dx*dx+dz*dz);
+            if (dist>1.8&&dist<30&&!fallingRef.current){
+              let ballBlock=false;
               for (const ball of d2.balls) {
                 if (ball.collected) continue;
-                const ebx = ball.group.position.x - ent.pos.x;
-                const ebz = ball.group.position.z - ent.pos.z;
-                if (Math.sqrt(ebx * ebx + ebz * ebz) < ball.radius + 0.5) {
-                  ballBlock = true; break;
-                }
+                const ebx=ball.group.position.x-ent.pos.x;
+                const ebz=ball.group.position.z-ent.pos.z;
+                if (Math.sqrt(ebx*ebx+ebz*ebz)<ball.radius+0.5){ballBlock=true;break;}
               }
-              if (!ballBlock) {
-                const spd = ENTITY_SPEED * dt;
-                const nx = ent.pos.x + (dx / dist) * spd;
-                const nz = ent.pos.z + (dz / dist) * spd;
-                if (!hitsWall(d2.wallBoxes, nx, ent.pos.z)) ent.pos.x = nx;
-                if (!hitsWall(d2.wallBoxes, ent.pos.x, nz)) ent.pos.z = nz;
-                ent.group.rotation.y = Math.atan2(dx, dz);
+              if (!ballBlock){
+                const spd=ENTITY_SPEED*dt;
+                const nx=ent.pos.x+(dx/dist)*spd, nz=ent.pos.z+(dz/dist)*spd;
+                if (!hitsWall(d2.wallBoxes,nx,ent.pos.z)) ent.pos.x=nx;
+                if (!hitsWall(d2.wallBoxes,ent.pos.x,nz)) ent.pos.z=nz;
+                ent.group.rotation.y=Math.atan2(dx,dz);
               }
             }
-
-            ent.group.position.set(ent.pos.x, Math.sin(ent.phase * 1.1) * 0.03, ent.pos.z);
-            ent.sprite.material.rotation = Math.sin(ent.phase * 0.4) * 0.08;
-            ent.sprite.material.opacity = 0.88 + Math.sin(ent.phase * 2.4) * 0.08;
+            ent.group.position.set(ent.pos.x,Math.sin(ent.phase*1.1)*0.03,ent.pos.z);
+            ent.sprite.material.rotation=Math.sin(ent.phase*0.4)*0.08;
+            ent.sprite.material.opacity=0.88+Math.sin(ent.phase*2.4)*0.08;
           }
 
-          // ── 눈 응시 감지 (raycaster) ──────────────────────────────────
-          raycaster.setFromCamera(centerNDC, camera);
-          const eyeHits = raycaster.intersectObjects(d2.entityGroups.map((ent) => ent.sprite), false);
-
-          if (eyeHits.length > 0) {
-            const hitIdx = d2.entityGroups.findIndex((ent) => ent.sprite === eyeHits[0].object);
-            if (hitIdx !== -1) {
-              if (gazeRef.current.spriteIdx === hitIdx) {
-                gazeRef.current.time += dt;
-              } else {
-                gazeRef.current = { time: dt, spriteIdx: hitIdx };
-              }
-              setGazeProgress(Math.min(gazeRef.current.time / GAZE_DEATH_TIME, 1));
-              if (gazeRef.current.time >= GAZE_DEATH_TIME) {
-                deadRef.current = true;
-                setDead(true);
-                gazeRef.current = { time: 0, spriteIdx: -1 };
-                setGazeProgress(0);
-                setTimeout(() => { resetToDim1(); }, 3000);
+          // 눈 응시 감지
+          raycaster.setFromCamera(centerNDC,camera);
+          const eyeHits=raycaster.intersectObjects(d2.entityGroups.map(e=>e.sprite),false);
+          if (eyeHits.length>0){
+            const hitIdx=d2.entityGroups.findIndex(e=>e.sprite===eyeHits[0].object);
+            if (hitIdx!==-1){
+              if (gazeRef.current.spriteIdx===hitIdx) gazeRef.current.time+=dt;
+              else gazeRef.current={time:dt,spriteIdx:hitIdx};
+              setGazeProgress(Math.min(gazeRef.current.time/GAZE_DEATH_TIME,1));
+              if (gazeRef.current.time>=GAZE_DEATH_TIME){
+                deadRef.current=true; setDead(true);
+                gazeRef.current={time:0,spriteIdx:-1}; setGazeProgress(0);
+                setTimeout(()=>{resetToDim1();},3000);
               }
             }
           } else {
-            if (gazeRef.current.spriteIdx !== -1) {
-              gazeRef.current = { time: 0, spriteIdx: -1 };
-              setGazeProgress(0);
+            if (gazeRef.current.spriteIdx!==-1){gazeRef.current={time:0,spriteIdx:-1};setGazeProgress(0);}
+          }
+        }
+      }
+
+      // ── 차원3 로직 (학교) ───────────────────────────────────────────────────
+      if (curDim===3) {
+        const d3=dim3DataRef.current!;
+        const mazeWd=DIM3_MW*CELL, mazeHt=DIM3_MH*CELL;
+
+        // 절벽 낙하 → 1차원 복귀
+        const outOfBounds=pos.x<-0.4||pos.x>mazeWd+0.4||pos.z<-0.4||pos.z>mazeHt+0.4;
+        if (outOfBounds&&!fallingRef.current&&!deadRef.current){fallingRef.current=true;setFalling(true);}
+        if (fallingRef.current){
+          fallSpeedRef.current+=22*dt; fallYRef.current+=fallSpeedRef.current*dt;
+          if (fallYRef.current>14){resetToDim1();return;}
+        }
+
+        if (!deadRef.current) {
+          // 차원3 엔티티 이동 + 응시 사망
+          for (const ent of d3.entityGroups) {
+            ent.phase+=dt;
+            const dx=pos.x-ent.pos.x, dz=pos.z-ent.pos.z;
+            const dist=Math.sqrt(dx*dx+dz*dz);
+            if (dist>1.5&&dist<35) {
+              const spd=ENTITY3_SPEED*dt*(ent.type==='janitor'?1.4:0.9);
+              const nx=ent.pos.x+(dx/dist)*spd, nz=ent.pos.z+(dz/dist)*spd;
+              if (!hitsWall(d3.wallBoxes,nx,ent.pos.z)) ent.pos.x=nx;
+              if (!hitsWall(d3.wallBoxes,ent.pos.x,nz)) ent.pos.z=nz;
+              ent.group.rotation.y=Math.atan2(dx,dz);
             }
+            if (ent.type==='ghost') {
+              ent.pos.y=Math.sin(ent.phase*1.3)*0.25;
+              ent.group.position.set(ent.pos.x,ent.pos.y,ent.pos.z);
+              ent.sprite.material.opacity=0.45+Math.sin(ent.phase*1.8)*0.2;
+            } else {
+              ent.group.position.set(ent.pos.x,0,ent.pos.z);
+              ent.sprite.material.opacity=0.88+Math.sin(ent.phase*2.0)*0.08;
+            }
+          }
+
+          // 엔티티 응시 사망
+          raycaster.setFromCamera(centerNDC,camera);
+          const eyeHits3=raycaster.intersectObjects(d3.entityGroups.map(e=>e.sprite),false);
+          if (eyeHits3.length>0){
+            const hitIdx=d3.entityGroups.findIndex(e=>e.sprite===eyeHits3[0].object);
+            if (hitIdx!==-1){
+              if (gazeRef.current.spriteIdx===hitIdx) gazeRef.current.time+=dt;
+              else gazeRef.current={time:dt,spriteIdx:hitIdx};
+              setGazeProgress(Math.min(gazeRef.current.time/GAZE_DEATH_TIME,1));
+              if (gazeRef.current.time>=GAZE_DEATH_TIME){
+                deadRef.current=true; setDead(true);
+                gazeRef.current={time:0,spriteIdx:-1}; setGazeProgress(0);
+                setTimeout(()=>{resetToDim1();},3000);
+              }
+            }
+          } else {
+            if (gazeRef.current.spriteIdx!==-1){gazeRef.current={time:0,spriteIdx:-1};setGazeProgress(0);}
           }
         }
       }
 
       // 위치 전송
       posTickRef.current++;
-      if (posTickRef.current >= 60 && onPositionChange) {
-        posTickRef.current = 0;
-        onPositionChange({ x:pos.x, y:P_HEIGHT, z:pos.z, mapId:`server_${serverId??'solo'}_dim${curDim}` });
-        if (curDim === 1) {
-          onRoomChange?.(Math.floor(pos.x / CELL) * 100 + Math.floor(pos.z / CELL) + 1);
-        } else {
-          onRoomChange?.(Math.floor(pos.x / CELL) * DIM2_MW + Math.floor(pos.z / CELL) + 1);
-        }
+      if (posTickRef.current>=60&&onPositionChange){
+        posTickRef.current=0;
+        onPositionChange({x:pos.x,y:P_HEIGHT,z:pos.z,mapId:`server_${serverId??'solo'}_dim${curDim}`});
+        if (curDim===1) onRoomChange?.(Math.floor(pos.x/CELL)*100+Math.floor(pos.z/CELL)+1);
+        else if (curDim===2) onRoomChange?.(Math.floor(pos.x/CELL)*DIM2_MW+Math.floor(pos.z/CELL)+1);
+        else onRoomChange?.(Math.floor(pos.x/CELL)*DIM3_MW+Math.floor(pos.z/CELL)+1);
       }
 
-      renderer.render(activeSceneRef.current!, camera);
+      renderer.render(activeSceneRef.current!,camera);
     };
     animate();
 
-    return () => {
+    return ()=>{
       cancelAnimationFrame(raf);
-      if (document.pointerLockElement === container) document.exitPointerLock();
-      container.removeEventListener("click", onClick);
-      document.removeEventListener("pointerlockchange", onLockChange);
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("resize", onResize);
+      if (document.pointerLockElement===container) document.exitPointerLock();
+      container.removeEventListener("click",onClick);
+      document.removeEventListener("pointerlockchange",onLockChange);
+      document.removeEventListener("mousemove",onMouseMove);
+      document.removeEventListener("keydown",onKeyDown);
+      document.removeEventListener("keyup",onKeyUp);
+      window.removeEventListener("resize",onResize);
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
       renderer.dispose();
-      lockedRef.current = false;
+      lockedRef.current=false;
     };
-  }, [complexity, equippedFlashlight, serverId, resetToDim1]);
+  },[complexity,equippedFlashlight,serverId,resetToDim1]);
+
+  const dimColors={
+    1:{bg:"rgba(180,140,60,0.4)",text:"rgba(255,240,160,0.8)",border:"rgba(255,220,100,0.2)",label:"◈ 1차원 — 리미널 미로"},
+    2:{bg:"rgba(100,200,80,0.3)",text:"rgba(180,255,160,0.9)",border:"rgba(120,220,100,0.3)",label:"◈ 2차원 — 드림코어 백룸"},
+    3:{bg:"rgba(100,140,210,0.35)",text:"rgba(180,210,255,0.9)",border:"rgba(120,160,240,0.3)",label:"◈ 3차원 — 학교"},
+  }[dimension];
 
   return (
     <div
       ref={containerRef}
       data-testid="maze-canvas"
       className="w-full h-full relative select-none"
-      style={{ touchAction:"none", cursor: locked ? "none" : "crosshair" }}
+      style={{touchAction:"none",cursor:locked?"none":"crosshair"}}
     >
-      {/* 조준선 */}
-      {locked && !dead && (
+      {locked&&!dead&&(
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
           <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
             <line x1="11" y1="2"  x2="11" y2="8"  stroke="rgba(255,255,200,0.9)" strokeWidth="1.5" strokeLinecap="round"/>
@@ -1093,100 +1435,91 @@ export default function MazeEngine({
         </div>
       )}
 
-      {/* 클릭 안내 */}
-      {!locked && !dead && (
+      {!locked&&!dead&&(
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 gap-2">
           <div className="px-5 py-2.5 rounded-2xl text-sm font-medium tracking-wider"
-            style={{ background:"rgba(0,0,0,0.55)", color:"rgba(255,245,180,0.92)", border:"1px solid rgba(255,240,160,0.18)", backdropFilter:"blur(6px)" }}>
+            style={{background:"rgba(0,0,0,0.55)",color:"rgba(255,245,180,0.92)",border:"1px solid rgba(255,240,160,0.18)",backdropFilter:"blur(6px)"}}>
             화면을 클릭하면 마우스가 잠깁니다
           </div>
-          <div className="text-xs" style={{ color:"rgba(255,245,180,0.45)" }}>
-            WASD 이동 · ESC 해제
-            {dimension===1 ? " · F 손전등 · X 열쇠" : " · X 공 줍기 (가까이서)"}
+          <div className="text-xs" style={{color:"rgba(255,245,180,0.45)"}}>
+            {dimension===1?"WASD 이동 · F 손전등 · X 열쇠":dimension===2?"WASD 이동 · X 공 줍기 · Q 공 던지기":"WASD 이동 · ESC 해제"}
           </div>
         </div>
       )}
 
-      {/* 차원2 인벤토리 (비치볼 수집) */}
-      {dimension===2 && locked && !dead && (
+      {dimension===2&&locked&&!dead&&(
         <div className="absolute top-4 right-4 pointer-events-none z-20 flex items-center gap-1.5">
           <div className="px-3 py-1.5 rounded-xl text-xs tracking-wide flex items-center gap-2"
-            style={{ background:"rgba(20,60,100,0.55)", color:"rgba(180,230,255,0.95)", border:"1px solid rgba(100,200,255,0.25)", backdropFilter:"blur(4px)" }}>
-            <span style={{ fontSize:"14px" }}>🏐</span>
+            style={{background:"rgba(20,60,20,0.55)",color:"rgba(180,255,160,0.95)",border:"1px solid rgba(100,255,100,0.25)",backdropFilter:"blur(4px)"}}>
+            <span style={{fontSize:"14px"}}>🏐</span>
             <span className="font-bold">{inventory}</span>
-            <span style={{ color:"rgba(140,200,255,0.6)" }}>/ ∞</span>
+            <span style={{color:"rgba(140,255,140,0.6)"}}>[Q던지기]</span>
           </div>
         </div>
       )}
 
-      {/* 차원 표시 */}
-      {locked && (
+      {locked&&(
         <div className="absolute top-16 left-1/2 -translate-x-1/2 pointer-events-none z-10">
           <div className="px-3 py-1 rounded-full text-[10px] tracking-widest"
-            style={{
-              background: dimension===1 ? "rgba(180,140,60,0.4)" : "rgba(255,120,200,0.35)",
-              color: dimension===1 ? "rgba(255,240,160,0.8)" : "rgba(255,180,230,0.9)",
-              border: dimension===1 ? "1px solid rgba(255,220,100,0.2)" : "1px solid rgba(255,150,220,0.3)",
-            }}>
-            {dimension===1 ? "◈ 1차원 — 리미널 미로" : "◈ 2차원 — 드림코어"}
+            style={{background:dimColors.bg,color:dimColors.text,border:`1px solid ${dimColors.border}`}}>
+            {dimColors.label}
           </div>
         </div>
       )}
 
-      {/* 문 상호작용 힌트 */}
-      {showDoorHint && locked && dimension===1 && (
+      {dimension===2&&locked&&currentAlgo&&(
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 pointer-events-none z-10">
+          <div className="px-2 py-0.5 rounded text-[9px] tracking-widest"
+            style={{background:"rgba(0,80,30,0.4)",color:"rgba(150,255,150,0.65)",border:"1px solid rgba(100,200,100,0.2)"}}>
+            알고리즘: {currentAlgo}
+          </div>
+        </div>
+      )}
+
+      {showDoorHint&&locked&&dimension===1&&(
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 pointer-events-none z-20">
           <div className="px-4 py-2 rounded-xl text-xs tracking-wide animate-pulse"
-            style={{ background:"rgba(255,100,180,0.3)", color:"rgba(255,200,230,0.95)", border:"1px solid rgba(255,100,180,0.4)", backdropFilter:"blur(4px)" }}>
-            {doorState==='closed' && "[ X ] 열쇠를 돌려 문을 여세요"}
-            {doorState==='unlocking' && "🔑 열쇠가 돌아가고 있습니다..."}
-            {doorState==='opening' && "삐걱— 문이 열립니다..."}
-            {doorState==='open' && "✦ 다른 차원이 보입니다 — 들어가세요"}
+            style={{background:"rgba(255,100,180,0.3)",color:"rgba(255,200,230,0.95)",border:"1px solid rgba(255,100,180,0.4)",backdropFilter:"blur(4px)"}}>
+            {doorState==='closed'&&"[ X ] 열쇠를 돌려 문을 여세요"}
+            {doorState==='unlocking'&&"🔑 열쇠가 돌아가고 있습니다..."}
+            {doorState==='opening'&&"삐걱— 문이 열립니다..."}
+            {doorState==='open'&&"✦ 다른 차원이 보입니다 — 들어가세요"}
           </div>
         </div>
       )}
 
-      {/* 응시 게이지 (차원2) */}
-      {dimension===2 && gazeProgress > 0 && !dead && (
+      {(dimension===2||dimension===3)&&gazeProgress>0&&!dead&&(
         <div className="absolute bottom-32 left-1/2 -translate-x-1/2 pointer-events-none z-20 flex flex-col items-center gap-1">
-          <span className="text-[10px] tracking-widest" style={{ color:"rgba(255,100,150,0.8)" }}>눈을 마주치고 있습니다</span>
-          <div className="w-48 h-2 rounded-full overflow-hidden" style={{ background:"rgba(80,0,30,0.5)" }}>
+          <span className="text-[10px] tracking-widest" style={{color:"rgba(255,100,150,0.8)"}}>눈을 마주치고 있습니다</span>
+          <div className="w-48 h-2 rounded-full overflow-hidden" style={{background:"rgba(80,0,30,0.5)"}}>
             <div className="h-full rounded-full transition-all" style={{
-              width: `${gazeProgress*100}%`,
-              background: `linear-gradient(90deg, #ff4488, #ff0066)`,
-              boxShadow: "0 0 8px #ff4488",
-            }} />
+              width:`${gazeProgress*100}%`,
+              background:"linear-gradient(90deg,#ff4488,#ff0066)",
+              boxShadow:"0 0 8px #ff4488",
+            }}/>
           </div>
-          <span className="text-[9px]" style={{ color:"rgba(255,80,120,0.6)" }}>{(gazeProgress*GAZE_DEATH_TIME).toFixed(1)}s / {GAZE_DEATH_TIME}s</span>
+          <span className="text-[9px]" style={{color:"rgba(255,80,120,0.6)"}}>{(gazeProgress*GAZE_DEATH_TIME).toFixed(1)}s / {GAZE_DEATH_TIME}s</span>
         </div>
       )}
 
-      {/* 절벽 낙하 오버레이 */}
-      {falling && !dead && (
+      {falling&&!dead&&(
         <div className="absolute inset-0 z-40 pointer-events-none"
-          style={{ background:"rgba(0,0,0,0.45)", backdropFilter:"blur(1px)" }}>
+          style={{background:"rgba(0,0,0,0.45)",backdropFilter:"blur(1px)"}}>
           <div className="absolute bottom-1/3 left-1/2 -translate-x-1/2 text-center">
-            <p className="text-2xl font-bold tracking-widest animate-pulse" style={{ color:"rgba(255,255,255,0.85)", textShadow:"0 0 20px #fff" }}>
+            <p className="text-2xl font-bold tracking-widest animate-pulse" style={{color:"rgba(255,255,255,0.85)",textShadow:"0 0 20px #fff"}}>
               ↓ 절벽에서 떨어지고 있습니다...
             </p>
           </div>
         </div>
       )}
 
-      {/* 사망 오버레이 */}
-      {dead && (
+      {dead&&(
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center pointer-events-none"
-          style={{ background:"rgba(60,0,20,0.85)", backdropFilter:"blur(2px)" }}>
+          style={{background:"rgba(60,0,20,0.85)",backdropFilter:"blur(2px)"}}>
           <div className="text-center space-y-3">
-            <p className="text-4xl" style={{ color:"#ff3366", textShadow:"0 0 30px #ff0044" }}>
-              👁
-            </p>
-            <p className="text-xl font-bold tracking-widest" style={{ color:"rgba(255,100,130,0.95)" }}>
-              눈을 마주쳤습니다
-            </p>
-            <p className="text-sm" style={{ color:"rgba(255,160,180,0.7)" }}>
-              1차원으로 돌아갑니다...
-            </p>
+            <p className="text-4xl" style={{color:"#ff3366",textShadow:"0 0 30px #ff0044"}}>👁</p>
+            <p className="text-xl font-bold tracking-widest" style={{color:"rgba(255,100,130,0.95)"}}>눈을 마주쳤습니다</p>
+            <p className="text-sm" style={{color:"rgba(255,160,180,0.7)"}}>1차원으로 돌아갑니다...</p>
           </div>
         </div>
       )}
