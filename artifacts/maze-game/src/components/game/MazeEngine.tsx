@@ -1064,7 +1064,7 @@ export default function MazeEngine({
 
     const raycaster=new THREE.Raycaster();
     const centerNDC=new THREE.Vector2(0,0);
-    const clock=new THREE.Clock();
+    let lastTime=performance.now();
     let t=0,raf: number;
 
     // ─── 미니맵 그리기 ──────────────────────────────────────────────────────────
@@ -1195,7 +1195,9 @@ export default function MazeEngine({
     const animate=()=>{
       raf=requestAnimationFrame(animate);
       if (!activeSceneRef.current) return;
-      const dt=Math.min(clock.getDelta(),0.05);
+      const now=performance.now();
+      const dt=Math.min((now-lastTime)/1000,0.05);
+      lastTime=now;
       t+=dt;
       if (portalCooldownRef.current>0) portalCooldownRef.current-=dt;
 
@@ -1591,6 +1593,7 @@ export default function MazeEngine({
       document.removeEventListener("keyup",onKeyUp);
       window.removeEventListener("resize",onResize);
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
+      renderer.forceContextLoss();
       renderer.dispose();
       lockedRef.current=false;
     };
