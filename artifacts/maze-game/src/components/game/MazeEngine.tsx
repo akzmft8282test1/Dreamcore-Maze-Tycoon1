@@ -916,6 +916,18 @@ export default function MazeEngine({
   const [soundOn,setSoundOn]=useState(true);
   const initialAnnouncementSentRef=useRef(false);
 
+  // callback refs — 항상 최신 prop 참조 유지, effect deps에서 제거 가능
+  const onDimensionChangeRef=useRef(onDimensionChange);
+  const onRoomChangeRef=useRef(onRoomChange);
+  const onDoorZoneChangeRef=useRef(onDoorZoneChange);
+  const onFlashlightChangeRef=useRef(onFlashlightChange);
+  const onPositionChangeRef=useRef(onPositionChange);
+  useEffect(()=>{ onDimensionChangeRef.current=onDimensionChange; });
+  useEffect(()=>{ onRoomChangeRef.current=onRoomChange; });
+  useEffect(()=>{ onDoorZoneChangeRef.current=onDoorZoneChange; });
+  useEffect(()=>{ onFlashlightChangeRef.current=onFlashlightChange; });
+  useEffect(()=>{ onPositionChangeRef.current=onPositionChange; });
+
   const yawRef=useRef(0);
   const pitchRef=useRef(0);
   const lockedRef=useRef(false);
@@ -964,7 +976,7 @@ export default function MazeEngine({
   const resetToDim1=useCallback(()=>{
     dimRef.current=1;
     setDimension(1);
-    onDimensionChange?.(1);
+    onDimensionChangeRef.current?.(1);
     setAmbient(1);
     deadRef.current=false;
     setDead(false);
@@ -979,10 +991,11 @@ export default function MazeEngine({
       activeSceneRef.current=dim1DataRef.current.scene;
       wallBoxRef.current=dim1DataRef.current.wallBoxes;
     }
-    onRoomChange?.(null);
+    onRoomChangeRef.current?.(null);
     initialAnnouncementSentRef.current=true;
     portalCooldownRef.current=0;
-  },[onDimensionChange]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
 
   useEffect(()=>{
     const container=containerRef.current;
@@ -1003,7 +1016,7 @@ export default function MazeEngine({
     const d1=buildDim1(complexity,equippedFlashlight??null);
     dim1DataRef.current=d1;
     doorZoneRef.current=d1.doorZone??null;
-    onDoorZoneChange?.(d1.doorZone??null);
+    onDoorZoneChangeRef.current?.(d1.doorZone??null);
     const d2=buildDim2();
     dim2DataRef.current=d2;
     setCurrentAlgo(d2.algoName);
@@ -1017,9 +1030,9 @@ export default function MazeEngine({
     if (!initialAnnouncementSentRef.current) {
       if (initialDimension===2) {
         const targetPart=initialPart&&initialPart>0?initialPart:1;
-        onRoomChange?.(targetPart);
+        onRoomChangeRef.current?.(targetPart);
       } else {
-        onRoomChange?.(null);
+        onRoomChangeRef.current?.(null);
       }
       initialAnnouncementSentRef.current=true;
     }
@@ -1045,7 +1058,7 @@ export default function MazeEngine({
       const k=e.key.toLowerCase();
       keysRef.current[k]=true;
       keyPressBuf.current.add(k);
-      if (k==="f"){flashOnRef.current=!flashOnRef.current;onFlashlightChange?.(flashOnRef.current);}
+      if (k==="f"){flashOnRef.current=!flashOnRef.current;onFlashlightChangeRef.current?.(flashOnRef.current);}
       if (["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k)) e.preventDefault();
     };
     const onKeyUp=(e: KeyboardEvent)=>{ keysRef.current[e.key.toLowerCase()]=false; };
@@ -1282,7 +1295,7 @@ export default function MazeEngine({
           const toDoor=new THREE.Vector3(d1.doorWorldPos.x-pos.x,0,d1.doorWorldPos.z-pos.z).normalize();
           if (fwd.dot(toDoor)>0.35) {
             dimRef.current=2; setDimension(2);
-            onDimensionChange?.(2);
+            onDimensionChangeRef.current?.(2);
             playPortalEnter(); playDimensionTransition(); setAmbient(2);
             setShowDoorHint(false);
             const rebuilt=buildDim2();
@@ -1297,7 +1310,7 @@ export default function MazeEngine({
             fallingRef.current=false; fallYRef.current=0; fallSpeedRef.current=0;
             activeSceneRef.current=rebuilt.scene;
             wallBoxRef.current=rebuilt.wallBoxes;
-            onRoomChange?.(targetPart);
+            onRoomChangeRef.current?.(targetPart);
             portalCooldownRef.current=2;
           }
         }
@@ -1352,7 +1365,7 @@ export default function MazeEngine({
             const tz=Math.floor((targetPart-1)/DIM2_MW)*CELL+CELL/2;
             pos.x=Math.max(CELL/2,Math.min(DIM2_MW*CELL-CELL/2,tx));
             pos.z=Math.max(CELL/2,Math.min(DIM2_MH*CELL-CELL/2,tz));
-            onRoomChange?.(targetPart);
+            onRoomChangeRef.current?.(targetPart);
             return;
           }
         }
@@ -1432,7 +1445,7 @@ export default function MazeEngine({
             if (pdist<1.6&&portalCooldownRef.current<=0) {
               // 3차원으로 진입
               dimRef.current=3; setDimension(3);
-              onDimensionChange?.(3);
+              onDimensionChangeRef.current?.(3);
               playPortalEnter(); playDimensionTransition(); setAmbient(3);
               const rebuilt3=buildDim3();
               dim3DataRef.current=rebuilt3;
@@ -1566,12 +1579,12 @@ export default function MazeEngine({
 
       // 위치 전송
       posTickRef.current++;
-      if (posTickRef.current>=60&&onPositionChange){
+      if (posTickRef.current>=60&&onPositionChangeRef.current){
         posTickRef.current=0;
-        onPositionChange({x:pos.x,y:P_HEIGHT,z:pos.z,mapId:`server_${serverId??'solo'}_dim${curDim}`});
-        if (curDim===1) onRoomChange?.(Math.floor(pos.x/CELL)*100+Math.floor(pos.z/CELL)+1);
-        else if (curDim===2) onRoomChange?.(Math.floor(pos.x/CELL)*DIM2_MW+Math.floor(pos.z/CELL)+1);
-        else onRoomChange?.(Math.floor(pos.x/CELL)*DIM3_MW+Math.floor(pos.z/CELL)+1);
+        onPositionChangeRef.current({x:pos.x,y:P_HEIGHT,z:pos.z,mapId:`server_${serverId??'solo'}_dim${curDim}`});
+        if (curDim===1) onRoomChangeRef.current?.(Math.floor(pos.x/CELL)*100+Math.floor(pos.z/CELL)+1);
+        else if (curDim===2) onRoomChangeRef.current?.(Math.floor(pos.x/CELL)*DIM2_MW+Math.floor(pos.z/CELL)+1);
+        else onRoomChangeRef.current?.(Math.floor(pos.x/CELL)*DIM3_MW+Math.floor(pos.z/CELL)+1);
       }
 
       // 미니맵 매 3프레임마다 갱신

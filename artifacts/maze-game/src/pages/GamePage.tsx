@@ -71,6 +71,13 @@ export default function GamePage() {
   }, [updateState]);
 
   const handleViewToggle = useCallback(() => setIs2DView(v => !v), []);
+  const handleDoorZoneChange = useCallback((zone: number | null) => {
+    setDoorZone(zone);
+    if (zone) toast({ title: "문 위치", description: `${zone}번 구역에 문이 있어요` });
+  }, [toast]);
+  const handleDimensionChange = useCallback((dim: 1 | 2 | 3) => setCurrentDimension(dim), []);
+  const handleFlashlightChange = useCallback((on: boolean) => setFlashlightOn(on), []);
+  const handleToggleFullBright = useCallback(() => setFullBright(v => !v), []);
 
   const handleEquipFlashlight = useCallback(async (itemId: string | null) => {
     try {
@@ -102,13 +109,10 @@ export default function GamePage() {
           pointerSensitivity={pointerSensitivity}
           initialPart={initialPart}
           initialDimension={initialDimension}
-          onDoorZoneChange={(zone) => {
-            setDoorZone(zone);
-            if (zone) toast({ title: "문 위치", description: `${zone}번 구역에 문이 있어요` });
-          }}
-          onDimensionChange={(dim) => setCurrentDimension(dim)}
+          onDoorZoneChange={handleDoorZoneChange}
+          onDimensionChange={handleDimensionChange}
           onPositionChange={handlePositionChange}
-          onFlashlightChange={(on) => setFlashlightOn(on && !fullBright)}
+          onFlashlightChange={handleFlashlightChange}
         />
       </div>
 
@@ -122,7 +126,7 @@ export default function GamePage() {
         equippedFlashlight={equippedFlashlight}
         ownedFlashlights={ownedFlashlights}
         onEquipFlashlight={handleEquipFlashlight}
-        onToggleFullBright={() => setFullBright(v => !v)}
+        onToggleFullBright={handleToggleFullBright}
         pointerSensitivity={pointerSensitivity}
         onPointerSensitivityChange={setPointerSensitivity}
         upgradeItems={upgradeItems}
