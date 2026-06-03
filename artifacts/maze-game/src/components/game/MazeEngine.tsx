@@ -35,10 +35,10 @@ const SPEED     = 5.5;
 const BASE_SENS = 0.002;
 const MAX_PITCH = Math.PI / 2 - 0.04;
 const GAZE_DEATH_TIME = 2.25;
-const DIM2_MW   = 12;
-const DIM2_MH   = 12;
-const DIM3_MW   = 10;
-const DIM3_MH   = 10;
+const DIM2_MW   = 20;
+const DIM2_MH   = 20;
+const DIM3_MW   = 18;
+const DIM3_MH   = 18;
 const BALL_FRICTION = 0.88;
 const ENTITY_SPEED  = 0.9;
 const ENTITY3_SPEED = 0.7;
@@ -418,8 +418,8 @@ interface Dim1Data {
 
 // ─── 차원1 씬 빌드 ────────────────────────────────────────────────────────────
 function buildDim1(complexity: number, equippedFlashlight: string | null): Dim1Data & { flashlight: THREE.SpotLight; ambientLight: THREE.AmbientLight } {
-  const mw=8+complexity*2, mh=8+complexity*2;
-  const maze=generateMaze(mw, mh);
+  const mw=12+complexity*2, mh=12+complexity*2;
+  const maze=generateMazeRandom(mw, mh);
   const wallBoxes=buildWallBoxes(maze, mw, mh);
   const TW=mw*CELL, TH=mh*CELL;
 
@@ -534,32 +534,33 @@ function buildDim1(complexity: number, equippedFlashlight: string | null): Dim1D
     scene.add(doorGroup);
   }
 
-  // ── 차원1 엔티티 2종 ────────────────────────────────────────────────────────
+  // ── 차원1 엔티티 2종 (3D 절차적 모델) ────────────────────────────────────────
   const entities: EntityData[]=[];
-  const entityTex=makeEntitySpriteTexture();
 
-  // 엔티티1: 그림자 인간 (어두운 형체)
+  // 엔티티1: 그림자 인간 (3D 절차적 모델 — 스프라이트 없음)
   for (let i=0;i<2;i++) {
-    const ex=(3+i*6)*CELL+CELL/2, ez=(4+i*4)*CELL+CELL/2;
+    const ex=(5+i*8)*CELL+CELL/2, ez=(6+i*5)*CELL+CELL/2;
     const group=new THREE.Group();
-    const spriteMat=new THREE.SpriteMaterial({
-      map:entityTex, transparent:true, depthWrite:false,
-      color:new THREE.Color(0.05,0.0,0.08), opacity:0.78
-    });
-    const sprite=new THREE.Sprite(spriteMat);
-    sprite.scale.set(2.0,2.8,1);
-    sprite.position.set(0,1.2,0);
-    group.add(sprite);
-
-    // 붉은 눈 발광
-    const eye=new THREE.Mesh(new THREE.SphereGeometry(0.08,6,4),new THREE.MeshBasicMaterial({color:0xff1111}));
-    eye.position.set(0.18,2.05,0.05); group.add(eye);
-    const eye2=new THREE.Mesh(new THREE.SphereGeometry(0.08,6,4),new THREE.MeshBasicMaterial({color:0xff1111}));
-    eye2.position.set(-0.18,2.05,0.05); group.add(eye2);
-
+    const darkMat=new THREE.MeshLambertMaterial({color:0x020005,transparent:true,opacity:0.88});
+    const body=new THREE.Mesh(new THREE.BoxGeometry(0.58,1.1,0.24),darkMat);
+    body.position.set(0,0.8,0); group.add(body);
+    const headMesh=new THREE.Mesh(new THREE.SphereGeometry(0.23,8,6),darkMat);
+    headMesh.position.set(0,1.58,0); group.add(headMesh);
+    const armL=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.88,0.18),darkMat);
+    armL.position.set(0.42,0.78,0); group.add(armL);
+    const armR=armL.clone(); armR.position.set(-0.42,0.78,0); group.add(armR);
+    const legL=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.88,0.22),darkMat);
+    legL.position.set(0.17,-0.27,0); group.add(legL);
+    const legR=legL.clone(); legR.position.set(-0.17,-0.27,0); group.add(legR);
+    const eyeMat=new THREE.MeshBasicMaterial({color:0xff1111});
+    const eL=new THREE.Mesh(new THREE.SphereGeometry(0.062,6,4),eyeMat);
+    eL.position.set(0.09,1.61,0.21); group.add(eL);
+    const eR=eL.clone(); eR.position.set(-0.09,1.61,0.21); group.add(eR);
+    const gl=new THREE.PointLight(0xff1100,0.9,5,1.6);
+    gl.position.set(0,1.58,0.2); group.add(gl);
     group.position.set(ex,0,ez);
     scene.add(group);
-    entities.push({group,mesh:sprite,pos:new THREE.Vector3(ex,0,ez),vel:new THREE.Vector3(),phase:Math.random()*Math.PI*2,type:'shadow'});
+    entities.push({group,mesh:headMesh,pos:new THREE.Vector3(ex,0,ez),vel:new THREE.Vector3(),phase:Math.random()*Math.PI*2,type:'shadow'});
   }
 
   // 엔티티2: 안개 구체 (발광 오브)
@@ -769,7 +770,7 @@ function buildDim2(): Dim2Data {
 // ─── 차원3 씬 데이터 타입 ─────────────────────────────────────────────────────
 interface EntityDim3Data {
   group: THREE.Group;
-  sprite: THREE.Sprite;
+  eyeMesh: THREE.Mesh;
   pos: THREE.Vector3;
   vel: THREE.Vector3;
   phase: number;
@@ -837,48 +838,68 @@ function buildDim3(): Dim3Data {
   if (mH.length>0){const im=new THREE.InstancedMesh(wallGeoH,wallMat,mH.length);mH.forEach((m,i)=>im.setMatrixAt(i,m));im.instanceMatrix.needsUpdate=true;scene.add(im);}
   if (mV.length>0){const im=new THREE.InstancedMesh(wallGeoV,wallMat,mV.length);mV.forEach((m,i)=>im.setMatrixAt(i,m));im.instanceMatrix.needsUpdate=true;scene.add(im);}
 
-  // ── 차원3 엔티티 2종 ─────────────────────────────────────────────────────────
+  // ── 차원3 엔티티 2종 (3D 절차적 모델 — 스프라이트 없음) ──────────────────────
   const entityGroups: EntityDim3Data[]=[];
-  const entityTex=makeEntitySpriteTexture();
+  const hitMat=new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false});
 
-  // 유령 학생 (흰색/파란 투명)
+  // 유령 학생 (반투명 파란 인형체)
   for (let i=0;i<2;i++) {
-    const ex=(2+i*5)*CELL+CELL/2, ez=(3+i*4)*CELL+CELL/2;
+    const ex=(4+i*9)*CELL+CELL/2, ez=(5+i*7)*CELL+CELL/2;
     const group=new THREE.Group();
-    const spriteMat=new THREE.SpriteMaterial({
-      map:entityTex, transparent:true, depthWrite:false,
-      color:new THREE.Color(0.75,0.88,1.0), opacity:0.62
-    });
-    const sprite=new THREE.Sprite(spriteMat);
-    sprite.scale.set(2.0,2.8,1);
-    sprite.position.set(0,1.2,0);
-    group.add(sprite);
-    const gl=new THREE.PointLight(0x88aaff,0.8,4,1.5);
+    const ghostMat=new THREE.MeshLambertMaterial({color:0xaaccff,transparent:true,opacity:0.52,emissive:new THREE.Color(0.1,0.18,0.5)});
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.28,1.1,8),ghostMat);
+    body.position.set(0,0.75,0); group.add(body);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(0.24,10,8),ghostMat);
+    head.position.set(0,1.54,0); group.add(head);
+    const eyeGMat=new THREE.MeshBasicMaterial({color:0x00ff88});
+    const gL=new THREE.Mesh(new THREE.SphereGeometry(0.058,6,4),eyeGMat);
+    gL.position.set(0.1,1.57,0.22); group.add(gL);
+    const gR=gL.clone(); gR.position.set(-0.1,1.57,0.22); group.add(gR);
+    const armMatG=new THREE.MeshLambertMaterial({color:0x9ab8ff,transparent:true,opacity:0.45});
+    const gaL=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.85,0.16),armMatG);
+    gaL.position.set(0.38,0.72,0); group.add(gaL);
+    const gaR=gaL.clone(); gaR.position.set(-0.38,0.72,0); group.add(gaR);
+    // 응시 충돌 대상 (투명 구체 — Raycaster용)
+    const eyeMesh=new THREE.Mesh(new THREE.SphereGeometry(0.38,6,4),hitMat.clone());
+    eyeMesh.position.set(0,1.54,0); group.add(eyeMesh);
+    const gl=new THREE.PointLight(0x88aaff,0.9,7,1.5);
     group.add(gl);
     group.position.set(ex,0,ez);
     scene.add(group);
-    entityGroups.push({group,sprite,pos:new THREE.Vector3(ex,0,ez),vel:new THREE.Vector3(),phase:Math.random()*Math.PI*2,type:'ghost'});
+    entityGroups.push({group,eyeMesh,pos:new THREE.Vector3(ex,0,ez),vel:new THREE.Vector3(),phase:Math.random()*Math.PI*2,type:'ghost'});
   }
 
-  // 관리인 (어두운 갈색)
+  // 관리인 (제복 인형체 — 학교 관리인)
   for (let i=0;i<2;i++) {
-    const ex=(1+i*7)*CELL+CELL/2, ez=(6+i*2)*CELL+CELL/2;
+    const ex=(2+i*11)*CELL+CELL/2, ez=(11+i*5)*CELL+CELL/2;
     const group=new THREE.Group();
-    const spriteMat=new THREE.SpriteMaterial({
-      map:entityTex, transparent:true, depthWrite:false,
-      color:new THREE.Color(0.32,0.22,0.12), opacity:0.9
-    });
-    const sprite=new THREE.Sprite(spriteMat);
-    sprite.scale.set(2.2,3.2,1);
-    sprite.position.set(0,1.3,0);
-    group.add(sprite);
-    // 녹색 눈
-    const eye=new THREE.Mesh(new THREE.SphereGeometry(0.07,5,4),new THREE.MeshBasicMaterial({color:0x00ff44}));
-    eye.position.set(0.15,2.1,0.05); group.add(eye);
-    const eye2=eye.clone(); eye2.position.set(-0.15,2.1,0.05); group.add(eye2);
+    const unifMat=new THREE.MeshLambertMaterial({color:0x1a1a2e});
+    const skinMat2=new THREE.MeshLambertMaterial({color:0xd4956a});
+    const jBody=new THREE.Mesh(new THREE.BoxGeometry(0.68,1.2,0.34),unifMat);
+    jBody.position.set(0,0.85,0); group.add(jBody);
+    const jHead=new THREE.Mesh(new THREE.SphereGeometry(0.25,8,6),skinMat2);
+    jHead.position.set(0,1.66,0); group.add(jHead);
+    const jCap=new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.31,0.12,8),new THREE.MeshLambertMaterial({color:0x0a0a1c}));
+    jCap.position.set(0,1.92,0); group.add(jCap);
+    const eyeJMat=new THREE.MeshBasicMaterial({color:0x00ff44});
+    const jEL=new THREE.Mesh(new THREE.SphereGeometry(0.065,6,4),eyeJMat);
+    jEL.position.set(0.1,1.68,0.23); group.add(jEL);
+    const jER=jEL.clone(); jER.position.set(-0.1,1.68,0.23); group.add(jER);
+    const legMatJ=new THREE.MeshLambertMaterial({color:0x0a0a1a});
+    const jLL=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.86,0.28),legMatJ);
+    jLL.position.set(0.2,-0.2,0); group.add(jLL);
+    const jLR=jLL.clone(); jLR.position.set(-0.2,-0.2,0); group.add(jLR);
+    const jAL=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.95,0.22),unifMat);
+    jAL.position.set(0.48,0.84,0); group.add(jAL);
+    const jAR=jAL.clone(); jAR.position.set(-0.48,0.84,0); group.add(jAR);
+    // 응시 충돌 대상 (투명 구체 — Raycaster용)
+    const eyeMesh=new THREE.Mesh(new THREE.SphereGeometry(0.38,6,4),hitMat.clone());
+    eyeMesh.position.set(0,1.66,0); group.add(eyeMesh);
+    const jGl=new THREE.PointLight(0x00ff44,0.5,5,1.5);
+    jGl.position.set(0,1.68,0); group.add(jGl);
     group.position.set(ex,0,ez);
     scene.add(group);
-    entityGroups.push({group,sprite,pos:new THREE.Vector3(ex,0,ez),vel:new THREE.Vector3(),phase:Math.random()*Math.PI*2,type:'janitor'});
+    entityGroups.push({group,eyeMesh,pos:new THREE.Vector3(ex,0,ez),vel:new THREE.Vector3(),phase:Math.random()*Math.PI*2,type:'janitor'});
   }
 
   return {scene,wallBoxes,entityGroups};
@@ -955,6 +976,7 @@ export default function MazeEngine({
   const fallYRef=useRef(0);
   const fallSpeedRef=useRef(0);
   const portalCooldownRef=useRef(0);
+  const chaseOverlayRef=useRef<HTMLDivElement>(null);
 
   sensRef.current=BASE_SENS*pointerSensitivity;
   is2DViewRef.current=is2DView;
@@ -1449,7 +1471,7 @@ export default function MazeEngine({
               playPortalEnter(); playDimensionTransition(); setAmbient(3);
               const rebuilt3=buildDim3();
               dim3DataRef.current=rebuilt3;
-              pos.x=DIM3_MW*CELL/2; pos.z=DIM3_MH*CELL/2;
+              pos.x=CELL/2; pos.z=CELL/2;
               yawRef.current=0; pitchRef.current=0;
               fallingRef.current=false; fallYRef.current=0; fallSpeedRef.current=0;
               activeSceneRef.current=rebuilt3.scene;
@@ -1542,10 +1564,8 @@ export default function MazeEngine({
             if (ent.type==='ghost') {
               ent.pos.y=Math.sin(ent.phase*1.3)*0.25;
               ent.group.position.set(ent.pos.x,ent.pos.y,ent.pos.z);
-              ent.sprite.material.opacity=0.45+Math.sin(ent.phase*1.8)*0.2;
             } else {
               ent.group.position.set(ent.pos.x,0,ent.pos.z);
-              ent.sprite.material.opacity=0.88+Math.sin(ent.phase*2.0)*0.08;
             }
           }
 
@@ -1557,9 +1577,9 @@ export default function MazeEngine({
 
           // 엔티티 응시 사망
           raycaster.setFromCamera(centerNDC,camera);
-          const eyeHits3=raycaster.intersectObjects(d3.entityGroups.map(e=>e.sprite),false);
+          const eyeHits3=raycaster.intersectObjects(d3.entityGroups.map(e=>e.eyeMesh),false);
           if (eyeHits3.length>0){
-            const hitIdx=d3.entityGroups.findIndex(e=>e.sprite===eyeHits3[0].object);
+            const hitIdx=d3.entityGroups.findIndex(e=>e.eyeMesh===eyeHits3[0].object);
             if (hitIdx!==-1){
               if (gazeRef.current.spriteIdx===hitIdx) gazeRef.current.time+=dt;
               else gazeRef.current={time:dt,spriteIdx:hitIdx};
@@ -1590,6 +1610,49 @@ export default function MazeEngine({
       // 미니맵 매 3프레임마다 갱신
       mapFrameRef.current++;
       if (mapFrameRef.current%3===0) drawMinimap();
+
+      // ── 추격 긴박감 오버레이 업데이트 ─────────────────────────────────────────
+      {
+        let minDist=999;
+        if (curDim===1) {
+          for (const ent of d1.entities) {
+            const dx=pos.x-ent.pos.x, dz=pos.z-ent.pos.z;
+            minDist=Math.min(minDist,Math.sqrt(dx*dx+dz*dz));
+          }
+        } else if (curDim===2&&dim2DataRef.current) {
+          for (const ent of dim2DataRef.current.entityGroups) {
+            const dx=pos.x-ent.pos.x, dz=pos.z-ent.pos.z;
+            minDist=Math.min(minDist,Math.sqrt(dx*dx+dz*dz));
+          }
+        } else if (curDim===3&&dim3DataRef.current) {
+          for (const ent of dim3DataRef.current.entityGroups) {
+            const dx=pos.x-ent.pos.x, dz=pos.z-ent.pos.z;
+            minDist=Math.min(minDist,Math.sqrt(dx*dx+dz*dz));
+          }
+        }
+        const el=chaseOverlayRef.current;
+        if (el&&!deadRef.current) {
+          // 12 이하일 때 점진 활성화, 4 이하면 최대
+          const raw=Math.max(0,Math.min(1,(12-minDist)/10));
+          const pulse=raw>0?0.5+Math.sin(t*(6+raw*8))*0.5*raw:0;
+          const intensity=raw*0.7+pulse*0.3;
+          const chromaStr=raw>0.5?`${Math.round((raw-0.5)*8)}px`:"0px";
+          const redAlpha=intensity*0.52;
+          const borderAlpha=intensity*0.7;
+          el.style.opacity=String(intensity>0?1:0);
+          el.style.background=`radial-gradient(ellipse at center, transparent 35%, rgba(180,0,30,${redAlpha}) 100%)`;
+          el.style.boxShadow=intensity>0.3?`inset 0 0 ${60+pulse*60}px rgba(220,0,0,${borderAlpha})`:"";
+          // 크로마틱 어버레이션: 3D 컨테이너에 filter 직접 적용
+          if (containerRef.current) {
+            containerRef.current.style.filter=raw>0.5
+              ?`drop-shadow(${chromaStr} 0 0 rgba(255,0,0,0.4)) drop-shadow(-${chromaStr} 0 0 rgba(0,100,255,0.3))`
+              :"";
+          }
+        } else if (el) {
+          el.style.opacity="0";
+          if (containerRef.current) containerRef.current.style.filter="";
+        }
+      }
 
       // 3D 렌더 (2D뷰 모드에서는 건너뜀)
       if (!is2DViewRef.current) renderer.render(activeSceneRef.current!,camera);
@@ -1637,6 +1700,13 @@ export default function MazeEngine({
         ref={containerRef}
         className="absolute inset-0"
         style={{display:is2DView?"none":"block",cursor:locked?"none":"crosshair"}}
+      />
+
+      {/* 추격 긴박감 오버레이 — 엔티티 접근 시 붉은 비네트 + 맥박 */}
+      <div
+        ref={chaseOverlayRef}
+        className="absolute inset-0 pointer-events-none z-5"
+        style={{opacity:0,transition:"opacity 0.15s",mixBlendMode:"screen"}}
       />
 
       {/* 미니맵 캔버스 — 3D뷰:우하단 코너, 2D뷰:풀스크린 */}
