@@ -8,7 +8,8 @@ RUN npm install -g pnpm@latest
 
 COPY . .
 
-RUN pnpm install --no-frozen-lockfile
+# 빌드 스크립트 허용 옵션 추가
+RUN pnpm install --no-frozen-lockfile --unsafe-perm
 RUN pnpm --filter @workspace/api-spec run codegen
 RUN pnpm --filter @workspace/db run push
 RUN pnpm build
