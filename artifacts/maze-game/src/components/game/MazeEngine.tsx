@@ -226,15 +226,151 @@ function generateMazeRandom(w: number, h: number): MazeCell[][] {
 // ─── 벽 충돌 박스 ─────────────────────────────────────────────────────────────
 interface WallBox { minX: number; maxX: number; minZ: number; maxZ: number; }
 
+type WallForm = "box" | "faceted";
+
+interface WallPiece {
+  offset: number;
+  length: number;
+  angle: number;
+  height: number;
+  depth: number;
+  form: WallForm;
+}
+
+/**
+ * 셀 경계 하나를 여러 가지 벽 모양으로 분해한다.
+ * offset은 벽의 로컬 길이 방향, angle은 기본 방향에서의 추가 회전이다.
+ * 충돌 박스도 같은 조각 목록으로 만들기 때문에 기울어진 벽과 실제 충돌이 어긋나지 않는다.
+ */
+function makeWallPieces(length: number, height: number, variant: number): WallPiece[] {
+  const style = ((variant % 5) + 5) % 5;
+  const depth = T_WALL * (style === 1 ? 1.35 : style === 4 ? 1.65 : 1);
+
+  if (style === 1) {
+    return [{ offset: 0, length: length * 1.04, angle: variant % 2 ? -0.14 : 0.14, height: height * 0.94, depth, form: "box" }];
+  }
+
+  if (style === 2) {
+    const pieceLength = length * 0.54;
+    return [
+      { offset: -length * 0.25, length: pieceLength, angle: -0.18, height: height * 0.86, depth, form: "box" },
+      { offset: 0, length: pieceLength, angle: 0.16, height, depth, form: "box" },
+      { offset: length * 0.25, length: pieceLength, angle: -0.15, height: height * 0.91, depth, form: "box" },
+    ];
+  }
+
+  if (style === 3) {
+    const pieceLength = length * 0.34;
+    return [
+      { offset: -length * 0.345, length: pieceLength, angle: 0.21, height: height * 0.76, depth, form: "box" },
+      { offset: -length * 0.115, length: pieceLength, angle: -0.2, height, depth, form: "box" },
+      { offset: length * 0.115, length: pieceLength, angle: 0.2, height: height * 0.88, depth, form: "box" },
+      { offset: length * 0.345, length: pieceLength, angle: -0.22, height: height * 0.8, depth, form: "box" },
+    ];
+  }
+
+  if (style === 4) {
+    return [{ offset: 0, length: length * 1.04, angle: variant % 2 ? 0.07 : -0.07, height, depth, form: "faceted" }];
+  }
+
+  return [{ offset: 0, length: length, angle: 0, height, depth: T_WALL, form: "box" }];
+}
+
+function rotatedWallBox(cx: number, cz: number, length: number, depth: number, rotation: number): WallBox {
+  const halfX = Math.abs(Math.cos(rotation)) * length / 2 + Math.abs(Math.sin(rotation)) * depth / 2;
+  const halfZ = Math.abs(Math.sin(rotation)) * length / 2 + Math.abs(Math.cos(rotation)) * depth / 2;
+  return { minX: cx - halfX, maxX: cx + halfX, minZ: cz - halfZ, maxZ: cz + halfZ };
+}
+
+function appendWallColliders(
+  boxes: WallBox[],
+  cx: number,
+  cz: number,
+  length: number,
+  baseRotation: number,
+  variant: number,
+) {
+  for (const piece of makeWallPieces(length, H_WALL, variant)) {
+    const pieceX = cx + Math.cos(baseRotation) * piece.offset;
+    const pieceZ = cz + Math.sin(baseRotation) * piece.offset;
+    boxes.push(rotatedWallBox(pieceX, pieceZ, piece.length, piece.depth, baseRotation + piece.angle));
+  }
+}
+
+function wallVariant(x: number, z: number, edge: number): number {
+  const value = Math.sin(x * 91.17 + z * 47.31 + edge * 19.73) * 43758.5453;
+  return Math.floor((value - Math.floor(value)) * 5);
+}
+
+function makeFacetedWallGeometry(length: number, height: number, depth: number): THREE.ExtrudeGeometry {
+  const shape = new THREE.Shape();
+  shape.moveTo(-length / 2, 0);
+  shape.lineTo(length / 2, 0);
+  shape.lineTo(length / 2, height * 0.72);
+  shape.lineTo(length * 0.26, height);
+  shape.lineTo(-length * 0.08, height * 0.86);
+  shape.lineTo(-length / 2, height * 0.78);
+  shape.closePath();
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: true,
+    bevelSegments: 1,
+    bevelSize: 0.04,
+    bevelThickness: 0.04,
+  });
+  geometry.translate(0, 0, -depth / 2);
+  return geometry;
+}
+
+function addVariedSolidWall(
+  scene: THREE.Scene,
+  material: THREE.Material,
+  cx: number,
+  cz: number,
+  length: number,
+  height: number,
+  baseRotation: number,
+  variant: number,
+) {
+  for (const piece of makeWallPieces(length, height, variant)) {
+    const px = cx + Math.cos(baseRotation) * piece.offset;
+    const pz = cz + Math.sin(baseRotation) * piece.offset;
+    const geometry = piece.form === "faceted"
+      ? makeFacetedWallGeometry(piece.length, piece.height, piece.depth)
+      : new THREE.BoxGeometry(piece.length, piece.height, piece.depth);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(px, piece.height / 2, pz);
+    mesh.rotation.y = baseRotation + piece.angle;
+    scene.add(mesh);
+
+    if (piece.form === "faceted") {
+      const cap = new THREE.Mesh(
+        new THREE.BoxGeometry(piece.length * 0.86, 0.055, piece.depth * 1.35),
+        material,
+      );
+      cap.position.set(px, piece.height + 0.02, pz);
+      cap.rotation.y = baseRotation + piece.angle;
+      scene.add(cap);
+    }
+  }
+}
+
 function buildWallBoxes(maze: MazeCell[][], mw: number, mh: number): WallBox[] {
   const boxes: WallBox[] = [];
-  const t = T_WALL / 2;
   for (let z=0;z<mh;z++) for (let x=0;x<mw;x++) {
     const cell=maze[z][x]; const wx=x*CELL, wz=z*CELL;
-    if (cell.walls.top)    boxes.push({minX:wx-t,maxX:wx+CELL+t,minZ:wz-t,      maxZ:wz+t});
-    if (cell.walls.left)   boxes.push({minX:wx-t,maxX:wx+t,      minZ:wz-t,      maxZ:wz+CELL+t});
-    if (z===mh-1&&cell.walls.bottom) boxes.push({minX:wx-t,maxX:wx+CELL+t,minZ:wz+CELL-t,maxZ:wz+CELL+t});
-    if (x===mw-1&&cell.walls.right)  boxes.push({minX:wx+CELL-t,maxX:wx+CELL+t,minZ:wz-t,      maxZ:wz+CELL+t});
+    if (cell.walls.top) {
+      appendWallColliders(boxes, wx + CELL / 2, wz, CELL, 0, wallVariant(x, z, 0));
+    }
+    if (cell.walls.left) {
+      appendWallColliders(boxes, wx, wz + CELL / 2, CELL, Math.PI / 2, wallVariant(x, z, 1));
+    }
+    if (z===mh-1&&cell.walls.bottom) {
+      appendWallColliders(boxes, wx + CELL / 2, wz + CELL, CELL, 0, wallVariant(x, z, 2));
+    }
+    if (x===mw-1&&cell.walls.right) {
+      appendWallColliders(boxes, wx + CELL, wz + CELL / 2, CELL, Math.PI / 2, wallVariant(x, z, 3));
+    }
   }
   return boxes;
 }
@@ -437,19 +573,21 @@ function buildDim1(complexity: number, equippedFlashlight: string | null): Dim1D
   ceil.rotation.x=Math.PI/2; ceil.position.set(TW/2,H_WALL,TH/2); scene.add(ceil);
 
   const wallMat=new THREE.MeshLambertMaterial({map:wallTex});
-  const wallGeoH=new THREE.BoxGeometry(CELL+T_WALL,H_WALL,T_WALL);
-  const wallGeoV=new THREE.BoxGeometry(T_WALL,H_WALL,CELL+T_WALL);
-  const mH: THREE.Matrix4[]=[],mV: THREE.Matrix4[]=[];
-  const m4=new THREE.Matrix4();
   for (let z=0;z<mh;z++) for (let x=0;x<mw;x++) {
     const cell=maze[z][x]; const wx=x*CELL,wz=z*CELL;
-    if (cell.walls.top)   mH.push(m4.clone().makeTranslation(wx+CELL/2,H_WALL/2,wz));
-    if (cell.walls.left)  mV.push(m4.clone().makeTranslation(wx,H_WALL/2,wz+CELL/2));
-    if (z===mh-1&&cell.walls.bottom) mH.push(m4.clone().makeTranslation(wx+CELL/2,H_WALL/2,wz+CELL));
-    if (x===mw-1&&cell.walls.right)  mV.push(m4.clone().makeTranslation(wx+CELL,H_WALL/2,wz+CELL/2));
+    if (cell.walls.top) {
+      addVariedSolidWall(scene, wallMat, wx + CELL / 2, wz, CELL, H_WALL, 0, wallVariant(x, z, 0));
+    }
+    if (cell.walls.left) {
+      addVariedSolidWall(scene, wallMat, wx, wz + CELL / 2, CELL, H_WALL, Math.PI / 2, wallVariant(x, z, 1));
+    }
+    if (z===mh-1&&cell.walls.bottom) {
+      addVariedSolidWall(scene, wallMat, wx + CELL / 2, wz + CELL, CELL, H_WALL, 0, wallVariant(x, z, 2));
+    }
+    if (x===mw-1&&cell.walls.right) {
+      addVariedSolidWall(scene, wallMat, wx + CELL, wz + CELL / 2, CELL, H_WALL, Math.PI / 2, wallVariant(x, z, 3));
+    }
   }
-  if (mH.length>0){const im=new THREE.InstancedMesh(wallGeoH,wallMat,mH.length);mH.forEach((m,i)=>im.setMatrixAt(i,m));im.instanceMatrix.needsUpdate=true;scene.add(im);}
-  if (mV.length>0){const im=new THREE.InstancedMesh(wallGeoV,wallMat,mV.length);mV.forEach((m,i)=>im.setMatrixAt(i,m));im.instanceMatrix.needsUpdate=true;scene.add(im);}
 
   const ambientLight=new THREE.AmbientLight(0xd4c47a,0.44);
   scene.add(ambientLight);
@@ -666,17 +804,21 @@ function buildDim2(): Dim2Data {
 
   const wallBoxes: WallBox[]=[];
 
-  function addWall(cx: number,cz: number,width: number,height: number,rotY: number,glassOnPlus: boolean) {
-    const planeGeo=new THREE.PlaneGeometry(width,height);
-    const glassRotY=rotY+(glassOnPlus?0:Math.PI);
-    const skyRotY=rotY+(glassOnPlus?Math.PI:0);
-    const glassPlane=new THREE.Mesh(planeGeo,glassMat);
-    glassPlane.rotation.y=glassRotY; glassPlane.position.set(cx,height/2,cz); scene.add(glassPlane);
-    const edgesGeo=new THREE.EdgesGeometry(planeGeo);
-    const outline=new THREE.LineSegments(edgesGeo,outLineMat);
-    outline.rotation.y=glassRotY; outline.position.set(cx,height/2+0.002,cz); scene.add(outline);
-    const skyPlane=new THREE.Mesh(planeGeo,skyMat);
-    skyPlane.rotation.y=skyRotY; skyPlane.position.set(cx,height/2,cz); scene.add(skyPlane);
+  function addWall(cx: number,cz: number,width: number,height: number,rotY: number,glassOnPlus: boolean,variant: number) {
+    for (const piece of makeWallPieces(width, height, variant)) {
+      const px=cx+Math.cos(rotY)*piece.offset;
+      const pz=cz+Math.sin(rotY)*piece.offset;
+      const planeGeo=new THREE.PlaneGeometry(piece.length,piece.height);
+      const glassRotY=rotY+piece.angle+(glassOnPlus?0:Math.PI);
+      const skyRotY=rotY+piece.angle+(glassOnPlus?Math.PI:0);
+      const glassPlane=new THREE.Mesh(planeGeo,glassMat);
+      glassPlane.rotation.y=glassRotY; glassPlane.position.set(px,piece.height/2,pz); scene.add(glassPlane);
+      const edgesGeo=new THREE.EdgesGeometry(planeGeo);
+      const outline=new THREE.LineSegments(edgesGeo,outLineMat);
+      outline.rotation.y=glassRotY; outline.position.set(px,piece.height/2+0.002,pz); scene.add(outline);
+      const skyPlane=new THREE.Mesh(planeGeo,skyMat);
+      skyPlane.rotation.y=skyRotY; skyPlane.position.set(px,piece.height/2,pz); scene.add(skyPlane);
+    }
   }
 
   const ceiling=new THREE.Mesh(new THREE.PlaneGeometry(mazeW+1,mazeH+1),new THREE.MeshLambertMaterial({map:ceilTex,color:0x20303a}));
@@ -687,23 +829,27 @@ function buildDim2(): Dim2Data {
       const cell=maze[r][c]; const wx=c*CELL,wz=r*CELL;
       if (cell.walls.top) {
         const cx2=wx+CELL/2,cz2=wz;
-        addWall(cx2,cz2,CELL,H_WALL,0,true);
-        wallBoxes.push({minX:cx2-CELL/2,maxX:cx2+CELL/2,minZ:cz2-T_WALL/2,maxZ:cz2+T_WALL/2});
+        const variant=wallVariant(c,r,0);
+        addWall(cx2,cz2,CELL,H_WALL,0,true,variant);
+        appendWallColliders(wallBoxes,cx2,cz2,CELL,0,variant);
       }
       if (cell.walls.left) {
         const cx2=wx,cz2=wz+CELL/2;
-        addWall(cx2,cz2,CELL,H_WALL,Math.PI/2,true);
-        wallBoxes.push({minX:cx2-T_WALL/2,maxX:cx2+T_WALL/2,minZ:cz2-CELL/2,maxZ:cz2+CELL/2});
+        const variant=wallVariant(c,r,1);
+        addWall(cx2,cz2,CELL,H_WALL,Math.PI/2,true,variant);
+        appendWallColliders(wallBoxes,cx2,cz2,CELL,Math.PI/2,variant);
       }
       if (r===DIM2_MH-1&&cell.walls.bottom) {
         const cx2=wx+CELL/2,cz2=wz+CELL;
-        addWall(cx2,cz2,CELL,H_WALL,0,false);
-        wallBoxes.push({minX:cx2-CELL/2,maxX:cx2+CELL/2,minZ:cz2-T_WALL/2,maxZ:cz2+T_WALL/2});
+        const variant=wallVariant(c,r,2);
+        addWall(cx2,cz2,CELL,H_WALL,0,false,variant);
+        appendWallColliders(wallBoxes,cx2,cz2,CELL,0,variant);
       }
       if (c===DIM2_MW-1&&cell.walls.right) {
         const cx2=wx+CELL,cz2=wz+CELL/2;
-        addWall(cx2,cz2,CELL,H_WALL,Math.PI/2,false);
-        wallBoxes.push({minX:cx2-T_WALL/2,maxX:cx2+T_WALL/2,minZ:cz2-CELL/2,maxZ:cz2+CELL/2});
+        const variant=wallVariant(c,r,3);
+        addWall(cx2,cz2,CELL,H_WALL,Math.PI/2,false,variant);
+        appendWallColliders(wallBoxes,cx2,cz2,CELL,Math.PI/2,variant);
       }
     }
   }
@@ -824,19 +970,21 @@ function buildDim3(): Dim3Data {
   // 학교 벽
   const wallTex=makeSchoolWallTex(); wallTex.repeat.set(1.0,1.0);
   const wallMat=new THREE.MeshLambertMaterial({map:wallTex});
-  const wallGeoH=new THREE.BoxGeometry(CELL+T_WALL,H_WALL,T_WALL);
-  const wallGeoV=new THREE.BoxGeometry(T_WALL,H_WALL,CELL+T_WALL);
-  const mH: THREE.Matrix4[]=[],mV: THREE.Matrix4[]=[];
-  const m4=new THREE.Matrix4();
   for (let z=0;z<DIM3_MH;z++) for (let x=0;x<DIM3_MW;x++) {
     const cell=maze[z][x]; const wx=x*CELL,wz=z*CELL;
-    if (cell.walls.top)   mH.push(m4.clone().makeTranslation(wx+CELL/2,H_WALL/2,wz));
-    if (cell.walls.left)  mV.push(m4.clone().makeTranslation(wx,H_WALL/2,wz+CELL/2));
-    if (z===DIM3_MH-1&&cell.walls.bottom) mH.push(m4.clone().makeTranslation(wx+CELL/2,H_WALL/2,wz+CELL));
-    if (x===DIM3_MW-1&&cell.walls.right)  mV.push(m4.clone().makeTranslation(wx+CELL,H_WALL/2,wz+CELL/2));
+    if (cell.walls.top) {
+      addVariedSolidWall(scene, wallMat, wx + CELL / 2, wz, CELL, H_WALL, 0, wallVariant(x, z, 0));
+    }
+    if (cell.walls.left) {
+      addVariedSolidWall(scene, wallMat, wx, wz + CELL / 2, CELL, H_WALL, Math.PI / 2, wallVariant(x, z, 1));
+    }
+    if (z===DIM3_MH-1&&cell.walls.bottom) {
+      addVariedSolidWall(scene, wallMat, wx + CELL / 2, wz + CELL, CELL, H_WALL, 0, wallVariant(x, z, 2));
+    }
+    if (x===DIM3_MW-1&&cell.walls.right) {
+      addVariedSolidWall(scene, wallMat, wx + CELL, wz + CELL / 2, CELL, H_WALL, Math.PI / 2, wallVariant(x, z, 3));
+    }
   }
-  if (mH.length>0){const im=new THREE.InstancedMesh(wallGeoH,wallMat,mH.length);mH.forEach((m,i)=>im.setMatrixAt(i,m));im.instanceMatrix.needsUpdate=true;scene.add(im);}
-  if (mV.length>0){const im=new THREE.InstancedMesh(wallGeoV,wallMat,mV.length);mV.forEach((m,i)=>im.setMatrixAt(i,m));im.instanceMatrix.needsUpdate=true;scene.add(im);}
 
   // ── 차원3 엔티티 2종 (3D 절차적 모델 — 스프라이트 없음) ──────────────────────
   const entityGroups: EntityDim3Data[]=[];
