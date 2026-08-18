@@ -69,6 +69,7 @@ catalog:
 autoInstallPeers: false
 
 onlyBuiltDependencies:
+  - '@esbuild-kit/esm-loader'
   - '@swc/core'
   - esbuild
   - msw

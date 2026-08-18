@@ -2,13 +2,11 @@ FROM node:22-slim
 
 WORKDIR /app
 
-# pnpm v9 최신 안정 버전 고정
+# pnpm v9 안정 버전 사용
 RUN npm install -g pnpm@9.15.4
 
 ENV PNPM_HOME="/root/.local/share/pnpm"
 ENV PATH="${PATH}:${PNPM_HOME}"
-ENV COREPACK_ENABLE_STRICT=0
-ENV PNPM_ALLOW_BUILD="*"
 
 COPY . .
 
