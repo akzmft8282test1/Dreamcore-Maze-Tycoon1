@@ -9,10 +9,14 @@ RUN npm install -g pnpm@latest
 
 COPY . .
 
-# pnpm-workspace.yaml 파일에 esbuild 빌드 허용 구문 직접 추가
-RUN echo "\nonlyBuiltDependencies:\n  - esbuild" >> pnpm-workspace.yaml
+# 기존 onlyBuiltDependencies 아래에 esbuild 항목만 깔끔하게 주입 (키 중복 방지)
+RUN if grep -q "onlyBuiltDependencies:" pnpm-workspace.yaml; then \
+      sed -i '/onlyBuiltDependencies:/a \  - esbuild' pnpm-workspace.yaml; \
+    else \
+      echo "\nonlyBuiltDependencies:\n  - esbuild" >> pnpm-workspace.yaml; \
+    fi
 
-# 의존성 설치 및 빌드
+# 의존성 설치 및 빌드 진행
 RUN pnpm install --no-frozen-lockfile
 RUN pnpm --filter @workspace/api-spec run codegen
 RUN pnpm --filter @workspace/db run push
