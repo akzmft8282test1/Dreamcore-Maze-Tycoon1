@@ -15,9 +15,8 @@ COPY lib/api-zod/package.json ./lib/api-zod/
 COPY lib/db/package.json ./lib/db/
 COPY scripts/package.json ./scripts/
 
-# package.json에 onlyBuiltDependencies 필드를 주입하여 esbuild 승인
-RUN npx --yes jq '.pnpm.onlyBuiltDependencies = ["esbuild"]' package.json > package.json.tmp && \
-    mv package.json.tmp package.json && \
+# Node.js 내장 스크립트로 package.json에 pnpm.onlyBuiltDependencies 추가 후 설치
+RUN node -e 'const fs=require("fs"); const pkg=JSON.parse(fs.readFileSync("package.json")); pkg.pnpm = pkg.pnpm || {}; pkg.pnpm.onlyBuiltDependencies = ["esbuild"]; fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2));' && \
     pnpm install --no-frozen-lockfile
 
 # 소스코드 전체 복사 및 빌드
