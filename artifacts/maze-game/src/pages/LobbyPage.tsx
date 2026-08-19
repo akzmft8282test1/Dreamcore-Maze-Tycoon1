@@ -25,7 +25,6 @@ import { Users, Plus, LogIn, Play } from "lucide-react";
 const createServerSchema = z.object({
   name: z.string().min(1, "서버 이름을 입력해주세요").max(30),
   mode: z.string(),
-  mapType: z.enum(["basic", "distorted"]),
   maxPlayers: z.coerce.number().min(2).max(32),
   isPublic: z.boolean(),
 });
@@ -39,19 +38,6 @@ const MODE_LABELS: Record<string, string> = {
   team: "팀",
   backroom: "백룸",
 };
-
-const MAP_TYPE_OPTIONS = [
-  {
-    value: "basic" as const,
-    label: "기본 백룸",
-    description: "곧은 벽과 익숙한 복도",
-  },
-  {
-    value: "distorted" as const,
-    label: "왜곡 백룸",
-    description: "기울어진 벽과 곡선이 섞인 미로",
-  },
-];
 
 export default function LobbyPage() {
   const [, setLocation] = useLocation();
@@ -69,7 +55,7 @@ export default function LobbyPage() {
 
   const form = useForm<CreateServerForm>({
     resolver: zodResolver(createServerSchema),
-    defaultValues: { name: "", mode: "explore", mapType: "basic", maxPlayers: 8, isPublic: true },
+    defaultValues: { name: "", mode: "explore", maxPlayers: 8, isPublic: true },
   });
 
   const onCreateServer = async (data: CreateServerForm) => {
@@ -151,30 +137,6 @@ export default function LobbyPage() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>백룸 스타일</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {MAP_TYPE_OPTIONS.map((option) => {
-                        const selected = form.watch("mapType") === option.value;
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => form.setValue("mapType", option.value, { shouldValidate: true })}
-                            data-testid={`select-map-type-${option.value}`}
-                            className={`rounded-lg border p-3 text-left transition-colors ${
-                              selected
-                                ? "border-primary bg-primary/15 text-foreground shadow-[0_0_18px_hsl(var(--primary)/0.2)]"
-                                : "border-border/40 bg-background/20 text-muted-foreground hover:border-primary/50 hover:text-foreground"
-                            }`}
-                          >
-                            <span className="block text-sm font-medium">{option.label}</span>
-                            <span className="mt-1 block text-[11px] leading-4 opacity-75">{option.description}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
                     <Label>최대 인원</Label>
                     <Input type="number" min={2} max={32} {...form.register("maxPlayers")} />
                   </div>
@@ -231,7 +193,6 @@ export default function LobbyPage() {
                     {server.currentPlayers}/{server.maxPlayers}명
                   </span>
                   <span>복잡도 {server.complexity}</span>
-                   <span>{server.mapType === "distorted" ? "왜곡 백룸" : "기본 백룸"}</span>
                 </div>
                 <Button
                   size="sm"

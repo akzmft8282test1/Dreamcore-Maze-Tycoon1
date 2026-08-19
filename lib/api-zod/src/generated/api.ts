@@ -8,26 +8,6 @@
 import * as zod from "zod";
 
 /**
- * @summary Skey 발급
- */
-export const GetSkeyResponse = zod.object({
-  token: zod.string(),
-  user: zod.object({
-    id: zod.number(),
-    username: zod.string(),
-    nickname: zod.string(),
-    role: zod.string(),
-    currency: zod.number(),
-    equippedSkin: zod.string().nullish(),
-    equippedFlashlight: zod.string().nullish(),
-    isBanned: zod.boolean(),
-    totalScore: zod.number(),
-    playtime: zod.number(),
-    createdAt: zod.string(),
-  }),
-});
-
-/**
  * @summary 헬스체크
  */
 export const HealthCheckResponse = zod.object({
@@ -305,7 +285,6 @@ export const ListServersResponseItem = zod.object({
   ownerId: zod.number(),
   ownerNickname: zod.string().optional(),
   mode: zod.string(),
-  mapType: zod.enum(["basic", "distorted"]),
   maxPlayers: zod.number(),
   currentPlayers: zod.number(),
   isPublic: zod.boolean(),
@@ -323,7 +302,6 @@ export const ListServersResponse = zod.array(ListServersResponseItem);
 export const CreateServerBody = zod.object({
   name: zod.string(),
   mode: zod.string(),
-  mapType: zod.enum(["basic", "distorted"]).optional(),
   maxPlayers: zod.number().optional(),
   isPublic: zod.boolean().optional(),
   complexity: zod.number().optional(),
@@ -344,7 +322,6 @@ export const GetServerResponse = zod.object({
   ownerId: zod.number(),
   ownerNickname: zod.string().optional(),
   mode: zod.string(),
-  mapType: zod.enum(["basic", "distorted"]),
   maxPlayers: zod.number(),
   currentPlayers: zod.number(),
   isPublic: zod.boolean(),
@@ -364,7 +341,6 @@ export const UpdateServerParams = zod.object({
 
 export const UpdateServerBody = zod.object({
   name: zod.string().optional(),
-  mapType: zod.enum(["basic", "distorted"]).optional(),
   maxPlayers: zod.number().optional(),
   isPublic: zod.boolean().optional(),
   complexity: zod.number().optional(),
@@ -379,7 +355,6 @@ export const UpdateServerResponse = zod.object({
   ownerId: zod.number(),
   ownerNickname: zod.string().optional(),
   mode: zod.string(),
-  mapType: zod.enum(["basic", "distorted"]),
   maxPlayers: zod.number(),
   currentPlayers: zod.number(),
   isPublic: zod.boolean(),

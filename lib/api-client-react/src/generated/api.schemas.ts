@@ -133,21 +133,12 @@ export interface Snapshot {
   createdAt: string;
 }
 
-export type GameServerMapType =
-  (typeof GameServerMapType)[keyof typeof GameServerMapType];
-
-export const GameServerMapType = {
-  basic: "basic",
-  distorted: "distorted",
-} as const;
-
 export interface GameServer {
   id: number;
   name: string;
   ownerId: number;
   ownerNickname?: string;
   mode: string;
-  mapType: GameServerMapType;
   maxPlayers: number;
   currentPlayers: number;
   isPublic: boolean;
@@ -158,18 +149,9 @@ export interface GameServer {
   createdAt: string;
 }
 
-export type CreateServerBodyMapType =
-  (typeof CreateServerBodyMapType)[keyof typeof CreateServerBodyMapType];
-
-export const CreateServerBodyMapType = {
-  basic: "basic",
-  distorted: "distorted",
-} as const;
-
 export interface CreateServerBody {
   name: string;
   mode: string;
-  mapType?: CreateServerBodyMapType;
   maxPlayers?: number;
   isPublic?: boolean;
   complexity?: number;
@@ -177,17 +159,8 @@ export interface CreateServerBody {
   mapWarp?: boolean;
 }
 
-export type UpdateServerBodyMapType =
-  (typeof UpdateServerBodyMapType)[keyof typeof UpdateServerBodyMapType];
-
-export const UpdateServerBodyMapType = {
-  basic: "basic",
-  distorted: "distorted",
-} as const;
-
 export interface UpdateServerBody {
   name?: string;
-  mapType?: UpdateServerBodyMapType;
   maxPlayers?: number;
   isPublic?: boolean;
   complexity?: number;

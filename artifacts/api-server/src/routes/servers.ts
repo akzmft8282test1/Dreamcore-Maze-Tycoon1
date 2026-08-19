@@ -33,7 +33,6 @@ router.get("/servers", requireAuth, async (req, res): Promise<void> => {
       ownerId: gameServersTable.ownerId,
       ownerNickname: usersTable.nickname,
       mode: gameServersTable.mode,
-      mapType: gameServersTable.mapType,
       maxPlayers: gameServersTable.maxPlayers,
       currentPlayers: gameServersTable.currentPlayers,
       isPublic: gameServersTable.isPublic,
@@ -53,7 +52,7 @@ router.get("/servers", requireAuth, async (req, res): Promise<void> => {
 // POST /api/servers — 서버 생성
 router.post("/servers", requireAuth, async (req, res): Promise<void> => {
   const user = (req as any).user;
-  const { name, mode = "explore", mapType = "basic", maxPlayers = 8, isPublic = true, complexity = 5, trapRate = 0.1, mapWarp = false } = req.body;
+  const { name, mode = "explore", maxPlayers = 8, isPublic = true, complexity = 5, trapRate = 0.1, mapWarp = false } = req.body;
 
   if (!name || name.trim().length === 0) {
     res.status(400).json({ error: "서버 이름을 입력해주세요" });
@@ -64,7 +63,6 @@ router.post("/servers", requireAuth, async (req, res): Promise<void> => {
     name: name.trim(),
     ownerId: user.id,
     mode,
-    mapType: mapType === "distorted" ? "distorted" : "basic",
     maxPlayers,
     isPublic,
     complexity,
@@ -90,7 +88,6 @@ router.get("/servers/:serverId", requireAuth, async (req, res): Promise<void> =>
       ownerId: gameServersTable.ownerId,
       ownerNickname: usersTable.nickname,
       mode: gameServersTable.mode,
-      mapType: gameServersTable.mapType,
       maxPlayers: gameServersTable.maxPlayers,
       currentPlayers: gameServersTable.currentPlayers,
       isPublic: gameServersTable.isPublic,
@@ -130,10 +127,9 @@ router.patch("/servers/:serverId", requireAuth, async (req, res): Promise<void> 
     return;
   }
 
-  const { name, mapType, maxPlayers, isPublic, complexity, trapRate, mapWarp, status } = req.body;
+  const { name, maxPlayers, isPublic, complexity, trapRate, mapWarp, status } = req.body;
   const updateData: Record<string, unknown> = {};
   if (name !== undefined) updateData.name = name;
-  if (mapType !== undefined) updateData.mapType = mapType === "distorted" ? "distorted" : "basic";
   if (maxPlayers !== undefined) updateData.maxPlayers = maxPlayers;
   if (isPublic !== undefined) updateData.isPublic = isPublic;
   if (complexity !== undefined) updateData.complexity = complexity;
