@@ -1,13 +1,9 @@
 # 1. Build Stage
 FROM node:22-alpine AS builder
 
-# Corepack 및 pnpm 설정
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
-
-# pnpm 빌드 스크립트 자동 승인 환경변수 설정
-ENV COREPACK_ENABLE_STRICT=0
 
 # 패키지 매니저 락파일 및 설정 복사
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
@@ -19,8 +15,9 @@ COPY lib/api-zod/package.json ./lib/api-zod/
 COPY lib/db/package.json ./lib/db/
 COPY scripts/package.json ./scripts/
 
-# esbuild 빌드 스크립트 무시 처리 우회 옵션 추가
-RUN pnpm install --no-only-built-dependencies --no-frozen-lockfile
+# .npmrc에 esbuild 승인 정책을 직접 주입 후 설치
+RUN echo "only-built-dependencies[]=esbuild" >> .npmrc && \
+    pnpm install --no-frozen-lockfile
 
 # 소스코드 전체 복사 및 빌드
 COPY . .
