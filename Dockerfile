@@ -15,8 +15,9 @@ COPY lib/api-zod/package.json ./lib/api-zod/
 COPY lib/db/package.json ./lib/db/
 COPY scripts/package.json ./scripts/
 
-# .npmrc에 esbuild 승인 정책을 직접 주입 후 설치
-RUN echo "only-built-dependencies[]=esbuild" >> .npmrc && \
+# package.json에 onlyBuiltDependencies 필드를 주입하여 esbuild 승인
+RUN npx --yes jq '.pnpm.onlyBuiltDependencies = ["esbuild"]' package.json > package.json.tmp && \
+    mv package.json.tmp package.json && \
     pnpm install --no-frozen-lockfile
 
 # 소스코드 전체 복사 및 빌드
