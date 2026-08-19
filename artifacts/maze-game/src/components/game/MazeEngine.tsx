@@ -14,6 +14,7 @@ interface MazeEngineProps {
   is2DView?: boolean;
   serverId?: number | null;
   complexity?: number;
+  backroomType?: "basic" | "distorted";
   equippedFlashlight?: string | null;
   pointerSensitivity?: number;
   initialPart?: number | null;
@@ -352,6 +353,119 @@ function addVariedSolidWall(
       cap.rotation.y = baseRotation + piece.angle;
       scene.add(cap);
     }
+  }
+}
+
+function makeDistortedWallPath(
+  cx: number,
+  cz: number,
+  length: number,
+  baseRotation: number,
+  variant: number,
+): THREE.Vector3[] {
+  const samples = 13;
+  const normalX = -Math.sin(baseRotation);
+  const normalZ = Math.cos(baseRotation);
+  const tangentX = Math.cos(baseRotation);
+  const tangentZ = Math.sin(baseRotation);
+  const phase = variant * 0.91 + cx * 0.063 + cz * 0.041;
+  const amplitude = 0.22 + (variant % 3) * 0.1;
+  const points: THREE.Vector3[] = [];
+
+  for (let i=0; i<samples; i++) {
+    const u=i/(samples-1);
+    const envelope=Math.sin(Math.PI*u);
+    const wave=Math.sin(u*Math.PI*2.4+phase)*0.62+Math.sin(u*Math.PI*5.2-phase*0.7)*0.28;
+    const lateral=envelope*amplitude*wave;
+    const forward=(u-0.5)*length;
+    points.push(new THREE.Vector3(
+      cx+tangentX*forward+normalX*lateral,
+      0,
+      cz+tangentZ*forward+normalZ*lateral,
+    ));
+  }
+  return points;
+}
+
+function makeDistortedWallGeometry(path: THREE.Vector3[], height: number, depth: number): THREE.BufferGeometry {
+  const vertices: number[]=[];
+  const indices: number[]=[];
+  const halfDepth=depth/2;
+
+  for (let i=0; i<path.length; i++) {
+    const prev=path[Math.max(0,i-1)];
+    const next=path[Math.min(path.length-1,i+1)];
+    const dx=next.x-prev.x;
+    const dz=next.z-prev.z;
+    const distance=Math.max(0.001,Math.hypot(dx,dz));
+    const nx=-dz/distance;
+    const nz=dx/distance;
+    const leftX=path[i].x+nx*halfDepth;
+    const leftZ=path[i].z+nz*halfDepth;
+    const rightX=path[i].x-nx*halfDepth;
+    const rightZ=path[i].z-nz*halfDepth;
+    vertices.push(
+      leftX,0,leftZ, rightX,0,rightZ,
+      leftX,height,leftZ, rightX,height,rightZ,
+    );
+  }
+
+  for (let i=0; i<path.length-1; i++) {
+    const a=i*4;
+    const b=(i+1)*4;
+    // 바닥, 천장, 양쪽 면을 모두 닫아 곡선 벽이 빛에 따라 입체적으로 보이게 한다.
+    indices.push(
+      a,b,a+1, a+1,b,b+1,
+      a+2,a+3,b+2, a+3,b+3,b+2,
+      a,a+2,b, a+2,b+2,b,
+      a+1,b+1,a+3, a+3,b+1,b+3,
+    );
+  }
+
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute("position",new THREE.Float32BufferAttribute(vertices,3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function addDistortedWall(
+  scene: THREE.Scene,
+  material: THREE.Material,
+  outlineMaterial: THREE.LineBasicMaterial,
+  cx: number,
+  cz: number,
+  length: number,
+  height: number,
+  baseRotation: number,
+  variant: number,
+): THREE.Vector3[] {
+  const path=makeDistortedWallPath(cx,cz,length,baseRotation,variant);
+  const geometry=makeDistortedWallGeometry(path,height,T_WALL*1.8);
+  const mesh=new THREE.Mesh(geometry,material);
+  scene.add(mesh);
+
+  const crestPoints=path.map((point)=>new THREE.Vector3(point.x,height+0.035,point.z));
+  const crest=new THREE.Line(new THREE.BufferGeometry().setFromPoints(crestPoints),outlineMaterial);
+  scene.add(crest);
+  return path;
+}
+
+function appendDistortedWallColliders(boxes: WallBox[], path: THREE.Vector3[]) {
+  const depth=T_WALL*2.0;
+  for (let i=0; i<path.length-1; i++) {
+    const a=path[i];
+    const b=path[i+1];
+    const dx=b.x-a.x;
+    const dz=b.z-a.z;
+    const segmentLength=Math.max(0.001,Math.hypot(dx,dz));
+    boxes.push(rotatedWallBox(
+      (a.x+b.x)/2,
+      (a.z+b.z)/2,
+      segmentLength,
+      depth,
+      Math.atan2(dz,dx),
+    ));
   }
 }
 
@@ -757,7 +871,7 @@ const BALL_COLORS=[0xff3344,0x2255ee,0xffcc00,0xff66bb,0x33ee88,0xff7700,0x9933f
 
 const ALGO_NAMES=["재귀 역추적","프림","크루스칼","사냥-죽이기","사이드와인더"];
 
-function buildDim2(): Dim2Data {
+function buildDim2(backroomType: "basic" | "distorted" = "basic"): Dim2Data {
   const algoIdx=Math.floor(Math.random()*5);
   const algoName=ALGO_NAMES[algoIdx];
   const mazeAlgos=[generateMaze,generateMazePrim,generateMazeKruskal,generateMazeHuntKill,generateMazeSidewinder];
@@ -801,10 +915,16 @@ function buildDim2(): Dim2Data {
   const skyMat=new THREE.MeshBasicMaterial({map:skyTex,side:THREE.BackSide});
   const glassMat=new THREE.MeshBasicMaterial({map:skyTex,side:THREE.BackSide,transparent:true,opacity:0.95});
   const outLineMat=new THREE.LineBasicMaterial({color:0xff99cc,transparent:true,opacity:0.22});
+  const distortionLineMat=new THREE.LineBasicMaterial({color:0xff69d8,transparent:true,opacity:0.62});
 
   const wallBoxes: WallBox[]=[];
 
   function addWall(cx: number,cz: number,width: number,height: number,rotY: number,glassOnPlus: boolean,variant: number) {
+    if (backroomType==="distorted") {
+      const path=addDistortedWall(scene,glassMat,distortionLineMat,cx,cz,width,height,rotY,variant);
+      appendDistortedWallColliders(wallBoxes,path);
+      return;
+    }
     for (const piece of makeWallPieces(width, height, variant)) {
       const px=cx+Math.cos(rotY)*piece.offset;
       const pz=cz+Math.sin(rotY)*piece.offset;
@@ -1058,6 +1178,7 @@ export default function MazeEngine({
   is2DView=false,
   serverId,
   complexity=5,
+  backroomType="basic",
   equippedFlashlight,
   pointerSensitivity=1,
   initialPart=null,
@@ -1187,7 +1308,7 @@ export default function MazeEngine({
     dim1DataRef.current=d1;
     doorZoneRef.current=d1.doorZone??null;
     onDoorZoneChangeRef.current?.(d1.doorZone??null);
-    const d2=buildDim2();
+    const d2=buildDim2(backroomType);
     dim2DataRef.current=d2;
     setCurrentAlgo(d2.algoName);
     const d3=buildDim3();
@@ -1468,7 +1589,7 @@ export default function MazeEngine({
             onDimensionChangeRef.current?.(2);
             playPortalEnter(); playDimensionTransition(); setAmbient(2);
             setShowDoorHint(false);
-            const rebuilt=buildDim2();
+            const rebuilt=buildDim2(backroomType);
             dim2DataRef.current=rebuilt;
             setCurrentAlgo(rebuilt.algoName);
             const targetPart=initialPart&&initialPart>0?initialPart:1;
@@ -1525,7 +1646,7 @@ export default function MazeEngine({
           fallYRef.current+=fallSpeedRef.current*dt;
           if (fallYRef.current>14){
             fallingRef.current=false; fallYRef.current=0; fallSpeedRef.current=0; setFalling(false);
-            const rebuilt=buildDim2();
+            const rebuilt=buildDim2(backroomType);
             dim2DataRef.current=rebuilt;
             setCurrentAlgo(rebuilt.algoName);
             activeSceneRef.current=rebuilt.scene;
@@ -1821,7 +1942,7 @@ export default function MazeEngine({
       renderer.dispose();
       lockedRef.current=false;
     };
-  },[complexity,equippedFlashlight,serverId,resetToDim1]);
+  },[complexity,equippedFlashlight,serverId,backroomType,resetToDim1]);
 
   const dimColors={
     1:{bg:"rgba(180,140,60,0.4)",text:"rgba(255,240,160,0.8)",border:"rgba(255,220,100,0.2)",label:"◈ 1차원 — 리미널 미로"},
