@@ -1,5 +1,4 @@
 # 1. Build Stage
-# 기존 node:20-alpine 대신 node:22-alpine 사용
 FROM node:22-alpine AS builder
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
@@ -16,15 +15,14 @@ COPY lib/api-zod/package.json ./lib/api-zod/
 COPY lib/db/package.json ./lib/db/
 COPY scripts/package.json ./scripts/
 
-# 의존성 설치
-RUN pnpm install --frozen-lockfile
+# pnpm 빌드 스크립트 무시 정책을 비활성화하고 설치 실행
+RUN pnpm config set ignore-scripts false && pnpm install --no-frozen-lockfile
 
 # 소스코드 전체 복사 및 빌드
 COPY . .
 RUN pnpm run build
 
 # 2. Production Stage
-# 실행 환경도 node:22-alpine으로 통일
 FROM node:22-alpine AS runner
 
 WORKDIR /app
