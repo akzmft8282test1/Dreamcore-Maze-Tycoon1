@@ -1,5 +1,6 @@
 # 1. Build Stage
-FROM node:20-alpine AS builder
+# 기존 node:20-alpine 대신 node:22-alpine 사용
+FROM node:22-alpine AS builder
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
@@ -23,7 +24,8 @@ COPY . .
 RUN pnpm run build
 
 # 2. Production Stage
-FROM node:20-alpine AS runner
+# 실행 환경도 node:22-alpine으로 통일
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
@@ -39,5 +41,4 @@ COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 5000
 
-# 백엔드 API 서버 및 프론트엔드 통합 실행
 CMD ["pnpm", "--filter", "@workspace/api-server", "run", "start"]
