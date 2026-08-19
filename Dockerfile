@@ -15,8 +15,8 @@ COPY lib/api-zod/package.json ./lib/api-zod/
 COPY lib/db/package.json ./lib/db/
 COPY scripts/package.json ./scripts/
 
-# pnpm 빌드 스크립트 무시 정책을 비활성화하고 설치 실행
-RUN pnpm config set ignore-scripts false && pnpm install --no-frozen-lockfile
+# ignore-scripts 플래그를 해제하여 esbuild 등의 빌드 스크립트 실행 허용
+RUN pnpm install --config.ignore-scripts=false --no-frozen-lockfile
 
 # 소스코드 전체 복사 및 빌드
 COPY . .
