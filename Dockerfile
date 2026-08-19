@@ -40,3 +40,6 @@ COPY --from=builder /app/node_modules ./node_modules
 EXPOSE 5000
 
 CMD ["pnpm", "--filter", "@workspace/api-server", "run", "start"]
+
+# --no-only-built-dependencies 플래그 추가
+RUN pnpm install --no-only-built-dependencies --no-frozen-lockfile
