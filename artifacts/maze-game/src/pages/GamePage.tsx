@@ -13,8 +13,10 @@ import {
   useUpdateGameState,
   useGetUserInventory,
   useEquipSkin,
+  useGetServer,
   getGetUserInventoryQueryKey,
   getGetMeQueryKey,
+  getGetServerQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
@@ -38,6 +40,14 @@ export default function GamePage() {
   const equipSkin = useEquipSkin();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { data: serverConfig } = useGetServer(currentServerId ?? 0, {
+    query: {
+      queryKey: getGetServerQueryKey(currentServerId ?? 0),
+      enabled: !!currentServerId,
+      staleTime: Infinity,
+    },
+  });
+  const mapType = currentServerId ? (serverConfig?.mapType ?? "basic") : "basic";
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -104,6 +114,7 @@ export default function GamePage() {
         <MazeEngine
           is2DView={is2DView}
           serverId={currentServerId}
+          mapType={mapType}
           complexity={5}
           equippedFlashlight={equippedFlashlight}
           pointerSensitivity={pointerSensitivity}

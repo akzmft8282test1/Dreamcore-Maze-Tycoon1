@@ -17,6 +17,7 @@ export const gameServersTable = pgTable("game_servers", {
   name: text("name").notNull(),
   ownerId: integer("owner_id").notNull().references(() => usersTable.id),
   mode: text("mode").notNull().default("explore"), // explore | liminal | party | team | backrooms
+  mapType: text("map_type").notNull().default("basic"), // basic | distorted
   maxPlayers: integer("max_players").notNull().default(8),
   currentPlayers: integer("current_players").notNull().default(0),
   isPublic: boolean("is_public").notNull().default(true),

@@ -305,6 +305,7 @@ export const ListServersResponseItem = zod.object({
   ownerId: zod.number(),
   ownerNickname: zod.string().optional(),
   mode: zod.string(),
+  mapType: zod.enum(["basic", "distorted"]),
   maxPlayers: zod.number(),
   currentPlayers: zod.number(),
   isPublic: zod.boolean(),
@@ -322,6 +323,7 @@ export const ListServersResponse = zod.array(ListServersResponseItem);
 export const CreateServerBody = zod.object({
   name: zod.string(),
   mode: zod.string(),
+  mapType: zod.enum(["basic", "distorted"]).optional(),
   maxPlayers: zod.number().optional(),
   isPublic: zod.boolean().optional(),
   complexity: zod.number().optional(),
@@ -342,6 +344,7 @@ export const GetServerResponse = zod.object({
   ownerId: zod.number(),
   ownerNickname: zod.string().optional(),
   mode: zod.string(),
+  mapType: zod.enum(["basic", "distorted"]),
   maxPlayers: zod.number(),
   currentPlayers: zod.number(),
   isPublic: zod.boolean(),
@@ -361,6 +364,7 @@ export const UpdateServerParams = zod.object({
 
 export const UpdateServerBody = zod.object({
   name: zod.string().optional(),
+  mapType: zod.enum(["basic", "distorted"]).optional(),
   maxPlayers: zod.number().optional(),
   isPublic: zod.boolean().optional(),
   complexity: zod.number().optional(),
@@ -375,6 +379,7 @@ export const UpdateServerResponse = zod.object({
   ownerId: zod.number(),
   ownerNickname: zod.string().optional(),
   mode: zod.string(),
+  mapType: zod.enum(["basic", "distorted"]),
   maxPlayers: zod.number(),
   currentPlayers: zod.number(),
   isPublic: zod.boolean(),

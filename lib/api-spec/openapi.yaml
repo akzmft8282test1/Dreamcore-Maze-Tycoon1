@@ -1279,6 +1279,9 @@ components:
           type: string
         mode:
           type: string
+        mapType:
+          type: string
+          enum: [basic, distorted]
         maxPlayers:
           type: integer
         currentPlayers:
@@ -1295,7 +1298,7 @@ components:
           type: string
         createdAt:
           type: string
-      required: [id, name, ownerId, mode, maxPlayers, currentPlayers, isPublic, complexity, trapRate, mapWarp, status, createdAt]
+      required: [id, name, ownerId, mode, mapType, maxPlayers, currentPlayers, isPublic, complexity, trapRate, mapWarp, status, createdAt]
 
     CreateServerBody:
       type: object
@@ -1304,6 +1307,9 @@ components:
           type: string
         mode:
           type: string
+        mapType:
+          type: string
+          enum: [basic, distorted]
         maxPlayers:
           type: integer
         isPublic:
@@ -1321,6 +1327,9 @@ components:
       properties:
         name:
           type: string
+        mapType:
+          type: string
+          enum: [basic, distorted]
         maxPlayers:
           type: integer
         isPublic:

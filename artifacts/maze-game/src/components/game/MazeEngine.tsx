@@ -13,6 +13,7 @@ import {
 interface MazeEngineProps {
   is2DView?: boolean;
   serverId?: number | null;
+  mapType?: "basic" | "distorted";
   complexity?: number;
   equippedFlashlight?: string | null;
   pointerSensitivity?: number;
@@ -24,6 +25,8 @@ interface MazeEngineProps {
   onFlashlightChange?: (on: boolean) => void;
   onDimensionChange?: (dim: 1 | 2 | 3) => void;
 }
+
+type MazeMapType = "basic" | "distorted";
 
 // ─── 상수 ────────────────────────────────────────────────────────────────────
 const CELL      = 4;
@@ -226,7 +229,7 @@ function generateMazeRandom(w: number, h: number): MazeCell[][] {
 // ─── 벽 충돌 박스 ─────────────────────────────────────────────────────────────
 interface WallBox { minX: number; maxX: number; minZ: number; maxZ: number; }
 
-type WallForm = "box" | "faceted";
+type WallForm = "box" | "faceted" | "curved";
 
 interface WallPiece {
   offset: number;
@@ -235,6 +238,7 @@ interface WallPiece {
   height: number;
   depth: number;
   form: WallForm;
+  curve?: number;
 }
 
 /**
@@ -242,7 +246,10 @@ interface WallPiece {
  * offset은 벽의 로컬 길이 방향, angle은 기본 방향에서의 추가 회전이다.
  * 충돌 박스도 같은 조각 목록으로 만들기 때문에 기울어진 벽과 실제 충돌이 어긋나지 않는다.
  */
-function makeWallPieces(length: number, height: number, variant: number): WallPiece[] {
+function makeWallPieces(length: number, height: number, variant: number, mapType: MazeMapType = "distorted"): WallPiece[] {
+  if (mapType === "basic") {
+    return [{ offset: 0, length, angle: 0, height, depth: T_WALL, form: "box" }];
+  }
   const style = ((variant % 5) + 5) % 5;
   const depth = T_WALL * (style === 1 ? 1.35 : style === 4 ? 1.65 : 1);
 
@@ -270,7 +277,15 @@ function makeWallPieces(length: number, height: number, variant: number): WallPi
   }
 
   if (style === 4) {
-    return [{ offset: 0, length: length * 1.04, angle: variant % 2 ? 0.07 : -0.07, height, depth, form: "faceted" }];
+    return [{
+      offset: 0,
+      length: length * 1.02,
+      angle: 0,
+      height: height * 0.96,
+      depth,
+      form: "curved",
+      curve: variant % 2 ? 0.68 : -0.68,
+    }];
   }
 
   return [{ offset: 0, length: length, angle: 0, height, depth: T_WALL, form: "box" }];
@@ -282,6 +297,48 @@ function rotatedWallBox(cx: number, cz: number, length: number, depth: number, r
   return { minX: cx - halfX, maxX: cx + halfX, minZ: cz - halfZ, maxZ: cz + halfZ };
 }
 
+interface WallSegment {
+  cx: number;
+  cz: number;
+  length: number;
+  rotation: number;
+}
+
+function getWallSegments(
+  cx: number,
+  cz: number,
+  piece: WallPiece,
+  baseRotation: number,
+): WallSegment[] {
+  if (!piece.curve) {
+    return [{
+      cx: cx + Math.cos(baseRotation) * piece.offset,
+      cz: cz + Math.sin(baseRotation) * piece.offset,
+      length: piece.length,
+      rotation: baseRotation + piece.angle,
+    }];
+  }
+
+  const arc = piece.curve;
+  const segmentCount = 7;
+  const halfArc = Math.abs(arc) / 2;
+  const radius = piece.length / (2 * Math.sin(halfArc));
+  const step = arc / segmentCount;
+  const segments: WallSegment[] = [];
+  for (let index = 0; index < segmentCount; index += 1) {
+    const t = -arc / 2 + step * (index + 0.5);
+    const localX = radius * Math.sin(t);
+    const localZ = Math.sign(arc) * radius * (Math.cos(t) - Math.cos(halfArc));
+    segments.push({
+      cx: cx + Math.cos(baseRotation) * (localX + piece.offset) - Math.sin(baseRotation) * localZ,
+      cz: cz + Math.sin(baseRotation) * (localX + piece.offset) + Math.cos(baseRotation) * localZ,
+      length: Math.abs(radius * step) * 1.08,
+      rotation: baseRotation + t,
+    });
+  }
+  return segments;
+}
+
 function appendWallColliders(
   boxes: WallBox[],
   cx: number,
@@ -289,11 +346,12 @@ function appendWallColliders(
   length: number,
   baseRotation: number,
   variant: number,
+  mapType: MazeMapType = "distorted",
 ) {
-  for (const piece of makeWallPieces(length, H_WALL, variant)) {
-    const pieceX = cx + Math.cos(baseRotation) * piece.offset;
-    const pieceZ = cz + Math.sin(baseRotation) * piece.offset;
-    boxes.push(rotatedWallBox(pieceX, pieceZ, piece.length, piece.depth, baseRotation + piece.angle));
+  for (const piece of makeWallPieces(length, H_WALL, variant, mapType)) {
+    for (const segment of getWallSegments(cx, cz, piece, baseRotation)) {
+      boxes.push(rotatedWallBox(segment.cx, segment.cz, segment.length, piece.depth, segment.rotation));
+    }
   }
 }
 
@@ -331,45 +389,47 @@ function addVariedSolidWall(
   height: number,
   baseRotation: number,
   variant: number,
+  mapType: MazeMapType = "distorted",
 ) {
-  for (const piece of makeWallPieces(length, height, variant)) {
-    const px = cx + Math.cos(baseRotation) * piece.offset;
-    const pz = cz + Math.sin(baseRotation) * piece.offset;
-    const geometry = piece.form === "faceted"
-      ? makeFacetedWallGeometry(piece.length, piece.height, piece.depth)
-      : new THREE.BoxGeometry(piece.length, piece.height, piece.depth);
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(px, piece.height / 2, pz);
-    mesh.rotation.y = baseRotation + piece.angle;
-    scene.add(mesh);
+  for (const piece of makeWallPieces(length, height, variant, mapType)) {
+    const segments = getWallSegments(cx, cz, piece, baseRotation);
+    for (const segment of segments) {
+      const geometry = piece.form === "faceted"
+        ? makeFacetedWallGeometry(segment.length, piece.height, piece.depth)
+        : new THREE.BoxGeometry(segment.length, piece.height, piece.depth);
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(segment.cx, piece.height / 2, segment.cz);
+      mesh.rotation.y = segment.rotation;
+      scene.add(mesh);
 
-    if (piece.form === "faceted") {
-      const cap = new THREE.Mesh(
-        new THREE.BoxGeometry(piece.length * 0.86, 0.055, piece.depth * 1.35),
-        material,
-      );
-      cap.position.set(px, piece.height + 0.02, pz);
-      cap.rotation.y = baseRotation + piece.angle;
-      scene.add(cap);
+      if (piece.form === "faceted") {
+        const cap = new THREE.Mesh(
+          new THREE.BoxGeometry(segment.length * 0.86, 0.055, piece.depth * 1.35),
+          material,
+        );
+        cap.position.set(segment.cx, piece.height + 0.02, segment.cz);
+        cap.rotation.y = segment.rotation;
+        scene.add(cap);
+      }
     }
   }
 }
 
-function buildWallBoxes(maze: MazeCell[][], mw: number, mh: number): WallBox[] {
+function buildWallBoxes(maze: MazeCell[][], mw: number, mh: number, mapType: MazeMapType = "distorted"): WallBox[] {
   const boxes: WallBox[] = [];
   for (let z=0;z<mh;z++) for (let x=0;x<mw;x++) {
     const cell=maze[z][x]; const wx=x*CELL, wz=z*CELL;
     if (cell.walls.top) {
-      appendWallColliders(boxes, wx + CELL / 2, wz, CELL, 0, wallVariant(x, z, 0));
+      appendWallColliders(boxes, wx + CELL / 2, wz, CELL, 0, wallVariant(x, z, 0), mapType);
     }
     if (cell.walls.left) {
-      appendWallColliders(boxes, wx, wz + CELL / 2, CELL, Math.PI / 2, wallVariant(x, z, 1));
+      appendWallColliders(boxes, wx, wz + CELL / 2, CELL, Math.PI / 2, wallVariant(x, z, 1), mapType);
     }
     if (z===mh-1&&cell.walls.bottom) {
-      appendWallColliders(boxes, wx + CELL / 2, wz + CELL, CELL, 0, wallVariant(x, z, 2));
+      appendWallColliders(boxes, wx + CELL / 2, wz + CELL, CELL, 0, wallVariant(x, z, 2), mapType);
     }
     if (x===mw-1&&cell.walls.right) {
-      appendWallColliders(boxes, wx + CELL, wz + CELL / 2, CELL, Math.PI / 2, wallVariant(x, z, 3));
+      appendWallColliders(boxes, wx + CELL, wz + CELL / 2, CELL, Math.PI / 2, wallVariant(x, z, 3), mapType);
     }
   }
   return boxes;
@@ -553,10 +613,10 @@ interface Dim1Data {
 }
 
 // ─── 차원1 씬 빌드 ────────────────────────────────────────────────────────────
-function buildDim1(complexity: number, equippedFlashlight: string | null): Dim1Data & { flashlight: THREE.SpotLight; ambientLight: THREE.AmbientLight } {
+function buildDim1(complexity: number, equippedFlashlight: string | null, mapType: MazeMapType): Dim1Data & { flashlight: THREE.SpotLight; ambientLight: THREE.AmbientLight } {
   const mw=12+complexity*2, mh=12+complexity*2;
   const maze=generateMazeRandom(mw, mh);
-  const wallBoxes=buildWallBoxes(maze, mw, mh);
+  const wallBoxes=buildWallBoxes(maze, mw, mh, mapType);
   const TW=mw*CELL, TH=mh*CELL;
 
   const scene=new THREE.Scene();
@@ -576,16 +636,16 @@ function buildDim1(complexity: number, equippedFlashlight: string | null): Dim1D
   for (let z=0;z<mh;z++) for (let x=0;x<mw;x++) {
     const cell=maze[z][x]; const wx=x*CELL,wz=z*CELL;
     if (cell.walls.top) {
-      addVariedSolidWall(scene, wallMat, wx + CELL / 2, wz, CELL, H_WALL, 0, wallVariant(x, z, 0));
+      addVariedSolidWall(scene, wallMat, wx + CELL / 2, wz, CELL, H_WALL, 0, wallVariant(x, z, 0), mapType);
     }
     if (cell.walls.left) {
-      addVariedSolidWall(scene, wallMat, wx, wz + CELL / 2, CELL, H_WALL, Math.PI / 2, wallVariant(x, z, 1));
+      addVariedSolidWall(scene, wallMat, wx, wz + CELL / 2, CELL, H_WALL, Math.PI / 2, wallVariant(x, z, 1), mapType);
     }
     if (z===mh-1&&cell.walls.bottom) {
-      addVariedSolidWall(scene, wallMat, wx + CELL / 2, wz + CELL, CELL, H_WALL, 0, wallVariant(x, z, 2));
+      addVariedSolidWall(scene, wallMat, wx + CELL / 2, wz + CELL, CELL, H_WALL, 0, wallVariant(x, z, 2), mapType);
     }
     if (x===mw-1&&cell.walls.right) {
-      addVariedSolidWall(scene, wallMat, wx + CELL, wz + CELL / 2, CELL, H_WALL, Math.PI / 2, wallVariant(x, z, 3));
+      addVariedSolidWall(scene, wallMat, wx + CELL, wz + CELL / 2, CELL, H_WALL, Math.PI / 2, wallVariant(x, z, 3), mapType);
     }
   }
 
@@ -757,7 +817,7 @@ const BALL_COLORS=[0xff3344,0x2255ee,0xffcc00,0xff66bb,0x33ee88,0xff7700,0x9933f
 
 const ALGO_NAMES=["재귀 역추적","프림","크루스칼","사냥-죽이기","사이드와인더"];
 
-function buildDim2(): Dim2Data {
+function buildDim2(mapType: MazeMapType): Dim2Data {
   const algoIdx=Math.floor(Math.random()*5);
   const algoName=ALGO_NAMES[algoIdx];
   const mazeAlgos=[generateMaze,generateMazePrim,generateMazeKruskal,generateMazeHuntKill,generateMazeSidewinder];
@@ -805,19 +865,19 @@ function buildDim2(): Dim2Data {
   const wallBoxes: WallBox[]=[];
 
   function addWall(cx: number,cz: number,width: number,height: number,rotY: number,glassOnPlus: boolean,variant: number) {
-    for (const piece of makeWallPieces(width, height, variant)) {
-      const px=cx+Math.cos(rotY)*piece.offset;
-      const pz=cz+Math.sin(rotY)*piece.offset;
-      const planeGeo=new THREE.PlaneGeometry(piece.length,piece.height);
-      const glassRotY=rotY+piece.angle+(glassOnPlus?0:Math.PI);
-      const skyRotY=rotY+piece.angle+(glassOnPlus?Math.PI:0);
+    for (const piece of makeWallPieces(width, height, variant, mapType)) {
+      for (const segment of getWallSegments(cx, cz, piece, rotY)) {
+      const planeGeo=new THREE.PlaneGeometry(segment.length,piece.height);
+      const glassRotY=segment.rotation+(glassOnPlus?0:Math.PI);
+      const skyRotY=segment.rotation+(glassOnPlus?Math.PI:0);
       const glassPlane=new THREE.Mesh(planeGeo,glassMat);
-      glassPlane.rotation.y=glassRotY; glassPlane.position.set(px,piece.height/2,pz); scene.add(glassPlane);
+      glassPlane.rotation.y=glassRotY; glassPlane.position.set(segment.cx,piece.height/2,segment.cz); scene.add(glassPlane);
       const edgesGeo=new THREE.EdgesGeometry(planeGeo);
       const outline=new THREE.LineSegments(edgesGeo,outLineMat);
-      outline.rotation.y=glassRotY; outline.position.set(px,piece.height/2+0.002,pz); scene.add(outline);
+      outline.rotation.y=glassRotY; outline.position.set(segment.cx,piece.height/2+0.002,segment.cz); scene.add(outline);
       const skyPlane=new THREE.Mesh(planeGeo,skyMat);
-      skyPlane.rotation.y=skyRotY; skyPlane.position.set(px,piece.height/2,pz); scene.add(skyPlane);
+      skyPlane.rotation.y=skyRotY; skyPlane.position.set(segment.cx,piece.height/2,segment.cz); scene.add(skyPlane);
+      }
     }
   }
 
@@ -831,25 +891,25 @@ function buildDim2(): Dim2Data {
         const cx2=wx+CELL/2,cz2=wz;
         const variant=wallVariant(c,r,0);
         addWall(cx2,cz2,CELL,H_WALL,0,true,variant);
-        appendWallColliders(wallBoxes,cx2,cz2,CELL,0,variant);
+        appendWallColliders(wallBoxes,cx2,cz2,CELL,0,variant,mapType);
       }
       if (cell.walls.left) {
         const cx2=wx,cz2=wz+CELL/2;
         const variant=wallVariant(c,r,1);
         addWall(cx2,cz2,CELL,H_WALL,Math.PI/2,true,variant);
-        appendWallColliders(wallBoxes,cx2,cz2,CELL,Math.PI/2,variant);
+        appendWallColliders(wallBoxes,cx2,cz2,CELL,Math.PI/2,variant,mapType);
       }
       if (r===DIM2_MH-1&&cell.walls.bottom) {
         const cx2=wx+CELL/2,cz2=wz+CELL;
         const variant=wallVariant(c,r,2);
         addWall(cx2,cz2,CELL,H_WALL,0,false,variant);
-        appendWallColliders(wallBoxes,cx2,cz2,CELL,0,variant);
+        appendWallColliders(wallBoxes,cx2,cz2,CELL,0,variant,mapType);
       }
       if (c===DIM2_MW-1&&cell.walls.right) {
         const cx2=wx+CELL,cz2=wz+CELL/2;
         const variant=wallVariant(c,r,3);
         addWall(cx2,cz2,CELL,H_WALL,Math.PI/2,false,variant);
-        appendWallColliders(wallBoxes,cx2,cz2,CELL,Math.PI/2,variant);
+        appendWallColliders(wallBoxes,cx2,cz2,CELL,Math.PI/2,variant,mapType);
       }
     }
   }
@@ -930,9 +990,9 @@ interface Dim3Data {
 }
 
 // ─── 차원3 씬 빌드 (학교) ────────────────────────────────────────────────────
-function buildDim3(): Dim3Data {
+function buildDim3(mapType: MazeMapType): Dim3Data {
   const maze=generateMazeRandom(DIM3_MW,DIM3_MH);
-  const wallBoxes=buildWallBoxes(maze,DIM3_MW,DIM3_MH);
+  const wallBoxes=buildWallBoxes(maze,DIM3_MW,DIM3_MH,mapType);
   const mazeW=DIM3_MW*CELL, mazeH=DIM3_MH*CELL;
 
   const scene=new THREE.Scene();
@@ -973,16 +1033,16 @@ function buildDim3(): Dim3Data {
   for (let z=0;z<DIM3_MH;z++) for (let x=0;x<DIM3_MW;x++) {
     const cell=maze[z][x]; const wx=x*CELL,wz=z*CELL;
     if (cell.walls.top) {
-      addVariedSolidWall(scene, wallMat, wx + CELL / 2, wz, CELL, H_WALL, 0, wallVariant(x, z, 0));
+      addVariedSolidWall(scene, wallMat, wx + CELL / 2, wz, CELL, H_WALL, 0, wallVariant(x, z, 0), mapType);
     }
     if (cell.walls.left) {
-      addVariedSolidWall(scene, wallMat, wx, wz + CELL / 2, CELL, H_WALL, Math.PI / 2, wallVariant(x, z, 1));
+      addVariedSolidWall(scene, wallMat, wx, wz + CELL / 2, CELL, H_WALL, Math.PI / 2, wallVariant(x, z, 1), mapType);
     }
     if (z===DIM3_MH-1&&cell.walls.bottom) {
-      addVariedSolidWall(scene, wallMat, wx + CELL / 2, wz + CELL, CELL, H_WALL, 0, wallVariant(x, z, 2));
+      addVariedSolidWall(scene, wallMat, wx + CELL / 2, wz + CELL, CELL, H_WALL, 0, wallVariant(x, z, 2), mapType);
     }
     if (x===DIM3_MW-1&&cell.walls.right) {
-      addVariedSolidWall(scene, wallMat, wx + CELL, wz + CELL / 2, CELL, H_WALL, Math.PI / 2, wallVariant(x, z, 3));
+      addVariedSolidWall(scene, wallMat, wx + CELL, wz + CELL / 2, CELL, H_WALL, Math.PI / 2, wallVariant(x, z, 3), mapType);
     }
   }
 
@@ -1057,6 +1117,7 @@ function buildDim3(): Dim3Data {
 export default function MazeEngine({
   is2DView=false,
   serverId,
+  mapType="basic",
   complexity=5,
   equippedFlashlight,
   pointerSensitivity=1,
@@ -1183,14 +1244,14 @@ export default function MazeEngine({
     camera.position.set(CELL/2,P_HEIGHT,CELL/2);
     activeCameraRef.current=camera;
 
-    const d1=buildDim1(complexity,equippedFlashlight??null);
+    const d1=buildDim1(complexity,equippedFlashlight??null,mapType);
     dim1DataRef.current=d1;
     doorZoneRef.current=d1.doorZone??null;
     onDoorZoneChangeRef.current?.(d1.doorZone??null);
-    const d2=buildDim2();
+    const d2=buildDim2(mapType);
     dim2DataRef.current=d2;
     setCurrentAlgo(d2.algoName);
-    const d3=buildDim3();
+    const d3=buildDim3(mapType);
     dim3DataRef.current=d3;
 
     activeSceneRef.current=d1.scene;
@@ -1468,7 +1529,7 @@ export default function MazeEngine({
             onDimensionChangeRef.current?.(2);
             playPortalEnter(); playDimensionTransition(); setAmbient(2);
             setShowDoorHint(false);
-            const rebuilt=buildDim2();
+            const rebuilt=buildDim2(mapType);
             dim2DataRef.current=rebuilt;
             setCurrentAlgo(rebuilt.algoName);
             const targetPart=initialPart&&initialPart>0?initialPart:1;
@@ -1525,7 +1586,7 @@ export default function MazeEngine({
           fallYRef.current+=fallSpeedRef.current*dt;
           if (fallYRef.current>14){
             fallingRef.current=false; fallYRef.current=0; fallSpeedRef.current=0; setFalling(false);
-            const rebuilt=buildDim2();
+            const rebuilt=buildDim2(mapType);
             dim2DataRef.current=rebuilt;
             setCurrentAlgo(rebuilt.algoName);
             activeSceneRef.current=rebuilt.scene;
@@ -1617,7 +1678,7 @@ export default function MazeEngine({
               dimRef.current=3; setDimension(3);
               onDimensionChangeRef.current?.(3);
               playPortalEnter(); playDimensionTransition(); setAmbient(3);
-              const rebuilt3=buildDim3();
+              const rebuilt3=buildDim3(mapType);
               dim3DataRef.current=rebuilt3;
               pos.x=CELL/2; pos.z=CELL/2;
               yawRef.current=0; pitchRef.current=0;
@@ -1821,7 +1882,7 @@ export default function MazeEngine({
       renderer.dispose();
       lockedRef.current=false;
     };
-  },[complexity,equippedFlashlight,serverId,resetToDim1]);
+  },[complexity,equippedFlashlight,mapType,serverId,resetToDim1]);
 
   const dimColors={
     1:{bg:"rgba(180,140,60,0.4)",text:"rgba(255,240,160,0.8)",border:"rgba(255,220,100,0.2)",label:"◈ 1차원 — 리미널 미로"},
