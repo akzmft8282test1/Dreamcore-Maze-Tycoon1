@@ -15,8 +15,8 @@ COPY lib/api-zod/package.json ./lib/api-zod/
 COPY lib/db/package.json ./lib/db/
 COPY scripts/package.json ./scripts/
 
-# 의존성 설치
-RUN pnpm install --no-frozen-lockfile
+# onlyBuiltDependencies 무시 옵션을 추가하여 설치
+RUN pnpm install --no-frozen-lockfile --config.onlyBuiltDependencies=""
 
 # 소스코드 전체 복사 및 빌드
 COPY . .
