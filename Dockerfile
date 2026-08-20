@@ -5,7 +5,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
-# 패키지 매니저 락파일 및 설정 복사
+# 패키지 매니저 락파일 및 설정 복사 (pnpm-workspace.yaml 포함)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY artifacts/api-server/package.json ./artifacts/api-server/
 COPY artifacts/maze-game/package.json ./artifacts/maze-game/
@@ -15,9 +15,8 @@ COPY lib/api-zod/package.json ./lib/api-zod/
 COPY lib/db/package.json ./lib/db/
 COPY scripts/package.json ./scripts/
 
-# esbuild 승인 후 설치 실행
-RUN pnpm approve-builds esbuild && \
-    pnpm install --no-frozen-lockfile
+# 의존성 설치 (pnpm-workspace.yaml의 onlyBuiltDependencies를 자동으로 읽음)
+RUN pnpm install --no-frozen-lockfile
 
 # 소스코드 전체 복사 및 빌드
 COPY . .
