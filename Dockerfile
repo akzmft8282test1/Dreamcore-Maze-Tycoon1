@@ -40,3 +40,5 @@ COPY --from=builder /app/node_modules ./node_modules
 EXPOSE 5000
 
 CMD ["pnpm", "--filter", "@workspace/api-server", "run", "start"]
+# pnpm-workspace.yaml의 allowBuilds 설정을 자동으로 참조하여 정상 설치됩니다.
+RUN pnpm install --no-frozen-lockfile
