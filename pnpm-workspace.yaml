@@ -35,10 +35,10 @@ minimumReleaseAgeExclude:
   - stripe-replit-sync
 
 packages:
-  - artifacts/*
-  - lib/*
-  - lib/integrations/*
-  - scripts
+  - 'artifacts/*'
+  - 'lib/*'
+  - 'scripts'
+
 
 catalog:
   '@replit/vite-plugin-cartographer': ^0.5.1
@@ -159,10 +159,3 @@ overrides:
   "@esbuild-kit/esm-loader": "npm:tsx@^4.21.0"
   esbuild: "0.27.3"
 
-packages:
-  - 'artifacts/*'
-  - 'lib/*'
-  - 'scripts'
-
-onlyBuiltDependencies:
-  - esbuild
